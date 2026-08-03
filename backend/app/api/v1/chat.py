@@ -11,7 +11,9 @@ async def chat(request: ChatRequest):
 
     orchestrator = Orchestrator()
 
-    context = Context()
+    context = Context(
+        user_message=request.message
+    )
 
     result = await orchestrator.handle_message(
         request.message,

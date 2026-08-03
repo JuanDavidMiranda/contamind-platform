@@ -1,5 +1,8 @@
 from app.ai.core.base_result import BaseResult
 from app.ai.core.context import Context
+from app.ai.core.base_task import BaseTask
+
+from app.ai.registry import registry
 
 from app.ai.workflows.core.base_workflow import BaseWorkflow
 
@@ -10,18 +13,25 @@ class ExogenaWorkflow(BaseWorkflow):
 
     name = "Preparación Exógena"
 
-    description = "Automatiza el proceso completo de exógena."
+    description = "Workflow de preparación de exógena."
 
     async def execute(
         self,
         context: Context
     ) -> BaseResult:
 
-        return BaseResult(
+        dian_agent = registry.get("dian")
 
-            success=True,
+        result = await dian_agent.execute(
 
-            message=(
-                "Workflow Exógena iniciado correctamente."
-            )
+            BaseTask(
+
+                objective="hola"
+
+            ),
+
+            context
+
         )
+
+        return result

@@ -1,16 +1,16 @@
-from app.ai.core.base_task import BaseTask
 from app.ai.core.context import Context
 from app.ai.core.base_result import BaseResult
-from app.ai.orchestrator.dispatcher import Dispatcher
 from app.ai.orchestrator.intent_resolver import IntentResolver
+from app.ai.orchestrator.workflow_resolver import WorkflowResolver
+from app.ai.workflows import workflow_registry
 
 
 class Orchestrator:
 
     def __init__(self):
 
-        self.dispatcher = Dispatcher()
         self.intent_resolver = IntentResolver()
+        self.workflow_resolver = WorkflowResolver()
 
     async def handle_message(
         self,
@@ -18,15 +18,14 @@ class Orchestrator:
         context: Context
     ) -> BaseResult:
 
-        agent_id = self.intent_resolver.resolve(message)
+        # 1. Obtener la intención del usuario
+        intent = self.intent_resolver.resolve(message)
 
-        task = BaseTask(
-            objective=message
-        )
+        # 2. Resolver qué workflow ejecutar
+        workflow_id = self.workflow_resolver.resolve(intent)
 
-        agent = self.dispatcher.dispatch(agent_id)
+        # 3. Obtener el workflow registrado
+        workflow = workflow_registry.get(workflow_id)
 
-        return await agent.execute(
-            task,
-            context
-        )
+        # 4. Ejecutar el workflow
+        return await workflow.execute(context)

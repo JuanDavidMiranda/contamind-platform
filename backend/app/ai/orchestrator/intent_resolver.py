@@ -1,16 +1,13 @@
 class IntentResolver:
 
-    def resolve(self, message: str) -> str:
+    def resolve(self, message: str):
 
-        message = message.lower()
+        text = message.lower()
 
-        if "hola" in message:
-            return "dian"
+        if "exogena" in text:
+            return "EXOGENA"
 
-        if "exogena" in message:
-            return "dian"
+        if "exógena" in text:
+            return "EXOGENA"
 
-        if "exógena" in message:
-            return "dian"
-
-        return "dian"
+        return "GENERAL"
