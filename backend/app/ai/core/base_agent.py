@@ -32,3 +32,8 @@ class BaseAgent(ABC):
         Verifica el estado del agente.
         """
         pass
+
+    @property
+    @abstractmethod
+    def capabilities(self) -> list:
+        pass
