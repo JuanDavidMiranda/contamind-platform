@@ -1,1 +1,1 @@
-# contamind-platform
+# Plataforma para automatización area contable
