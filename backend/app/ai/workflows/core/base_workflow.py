@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from app.ai.core.context import Context
-from app.ai.core.base_result import BaseResult
+from app.ai.workflows.core.execution import WorkflowExecution
 
 
 class BaseWorkflow(ABC):
@@ -15,6 +15,7 @@ class BaseWorkflow(ABC):
     @abstractmethod
     async def execute(
         self,
+        execution: WorkflowExecution,
         context: Context
-    ) -> BaseResult:
+    ):
         pass

@@ -1,37 +1,34 @@
-from app.ai.core.base_result import BaseResult
-from app.ai.core.context import Context
-from app.ai.core.base_task import BaseTask
-
-from app.ai.registry import registry
-
 from app.ai.workflows.core.base_workflow import BaseWorkflow
+
+from app.ai.workflows.exogena.states.start import StartState
+from app.ai.workflows.exogena.states.waiting_nit import WaitingNitState
+from app.ai.workflows.exogena.states.waiting_fisical_year import WaitingFiscalYearState
 
 
 class ExogenaWorkflow(BaseWorkflow):
 
     id = "exogena"
 
-    name = "Preparación Exógena"
+    name = "Exógena"
 
-    description = "Workflow de preparación de exógena."
+    description = "Workflow para la generación de información exógena."
 
     async def execute(
         self,
-        context: Context
-    ) -> BaseResult:
+        execution,
+        context
+    ):
 
-        dian_agent = registry.get("dian")
+        states = {
 
-        result = await dian_agent.execute(
+            "START": StartState(),
 
-            BaseTask(
+            "WAITING_NIT": WaitingNitState(),
 
-                objective="hola"
+            "WAITING_FISCAL_YEAR": WaitingFiscalYearState()
 
-            ),
+        }
 
-            context
+        state = states[context.state]
 
-        )
-
-        return result
+        return await state.execute(context)

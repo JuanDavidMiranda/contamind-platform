@@ -1,13 +1,17 @@
+from app.ai.orchestrator.intent_catalog import INTENTS
+
+
 class IntentResolver:
 
-    def resolve(self, message: str):
+    def resolve(self, message: str) -> str:
 
         text = message.lower()
 
-        if "exogena" in text:
-            return "EXOGENA"
+        for definition in INTENTS:
 
-        if "exógena" in text:
-            return "EXOGENA"
+            for keyword in definition.keywords:
 
-        return "GENERAL"
+                if keyword in text:
+                    return definition.action
+
+        return "chat"
