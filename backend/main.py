@@ -1,23 +1,35 @@
 from fastapi import FastAPI
-from app.config import settings
-from app.api import router
-from app.ai.bootstrap.bootstrap import bootstrap
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config.settings import settings
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
-    description=settings.DESCRIPTION
+    description=settings.DESCRIPTION,
+    debug=settings.DEBUG,
 )
 
-bootstrap()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+)
 
-app.include_router(router)
 
-@app.get("/")
-async def root():
+@app.get("/", tags=["platform"])
+async def root() -> dict[str, str]:
     return {
         "application": settings.APP_NAME,
         "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT,
         "status": "running",
-        "message": "Welcome to ContaMind AI 🚀"
     }
+
+
+@app.get("/health", tags=["platform"])
+async def health() -> dict[str, str]:
+    return {"status": "ok", "service": settings.APP_NAME}
