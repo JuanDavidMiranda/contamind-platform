@@ -15,6 +15,10 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:5173",
     ]
+    DATABASE_URL: str = "sqlite:///./contamind.db"
+    AUTH_SECRET_KEY: str = "development-only-change-this-secret-key"
+    AUTH_TOKEN_TTL_MINUTES: int = 480
+    PLATFORM_ADMIN_EMAILS: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
