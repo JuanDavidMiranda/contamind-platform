@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     AUTH_TOKEN_TTL_MINUTES: int = 480
     PLATFORM_ADMIN_EMAILS: str = ""
     FEATURE_FLAGS: dict[str, bool] = {}
+    SESSION_MAX_ACTIVE: int = 1000
+    SESSION_TTL_SECONDS: int = 3600
 
     model_config = SettingsConfigDict(
         env_file=".env",
