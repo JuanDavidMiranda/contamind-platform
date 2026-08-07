@@ -19,25 +19,6 @@ INTENTS = [
             "exógena",
             "medios magnéticos"
         ]
-    ),
-
-    IntentDefinition(
-        domain="dian",
-        action="rut",
-        keywords=[
-            "rut",
-            "registro único tributario"
-        ]
-    ),
-
-    IntentDefinition(
-        domain="dian",
-        action="facturacion",
-        keywords=[
-            "factura",
-            "facturación",
-            "facturación electrónica"
-        ]
     )
 
 ]

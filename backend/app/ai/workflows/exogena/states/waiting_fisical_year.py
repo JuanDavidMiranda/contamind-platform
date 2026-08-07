@@ -7,18 +7,18 @@ class WaitingFiscalYearState:
 
         context.variables["year"] = context.user_message
 
-        context.state = "RUNNING"
+        message = (
+            f"Perfecto.\n"
+            f"Voy a preparar la exógena del año "
+            f"{context.variables['year']} "
+            f"para la empresa "
+            f"{context.variables['nit']}."
+        )
+
+        context.state = "START"
+        context.workflow = None
 
         return BaseResult(
-
             success=True,
-
-            message=(
-                f"Perfecto.\n"
-                f"Voy a preparar la exógena del año "
-                f"{context.variables['year']} "
-                f"para la empresa "
-                f"{context.variables['nit']}."
-            )
-
+            message=message,
         )

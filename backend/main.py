@@ -1,10 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.bootstrap.bootstrap import bootstrap
 from app.api.router import api_router
 from app.config.settings import settings
 from app.database import Base, engine
 from app.models import user as user_models
+from app.shared.errors import register_exception_handlers
+from app.shared.logging import RequestLoggingMiddleware, configure_logging
+
+configure_logging(debug=settings.DEBUG)
+bootstrap()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -13,7 +19,11 @@ app = FastAPI(
     debug=settings.DEBUG,
 )
 
-Base.metadata.create_all(bind=engine)
+register_exception_handlers(app)
+
+if settings.DATABASE_URL.startswith("sqlite"):
+    Base.metadata.create_all(bind=engine)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

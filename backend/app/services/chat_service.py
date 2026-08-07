@@ -1,5 +1,5 @@
 from app.ai.orchestrator.orchestrator import Orchestrator
-from app.ai.core.context import Context
+from app.ai.session.manager import SessionManager
 
 
 class ChatService:
@@ -7,6 +7,7 @@ class ChatService:
     def __init__(self):
 
         self.orchestrator = Orchestrator()
+        self.sessions = SessionManager()
 
     async def process(
         self,
@@ -14,12 +15,15 @@ class ChatService:
         session_id: str | None = None
     ):
 
-        context = Context()
+        context = self.sessions.get(
+            session_id or "default"
+        )
 
-        if session_id:
-            context.session_id = session_id
-
-        return await self.orchestrator.handle_message(
+        result = await self.orchestrator.handle_message(
             message,
             context
         )
+
+        self.sessions.save(context)
+
+        return result

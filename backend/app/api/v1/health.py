@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.ai.registry import registry
+from app.config.settings import settings
 
 router = APIRouter(tags=["Health"])
 
@@ -9,8 +10,8 @@ router = APIRouter(tags=["Health"])
 async def health():
     return {
         "status": "healthy",
-        "application": "ContaMind AI",
-        "version": "1.0.0",
+        "application": settings.APP_NAME,
+        "version": settings.VERSION,
     }
 
 

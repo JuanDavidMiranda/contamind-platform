@@ -7,7 +7,9 @@ class ConsultarObligacionesTool(BaseTool):
 
     name = "Consultar obligaciones"
 
-    description = "Consulta obligaciones tributarias."
+    description = "Consulta obligaciones tributarias. (MOCK)"
+
+    is_mock = True
 
 
     async def execute(self, context):
@@ -16,6 +18,6 @@ class ConsultarObligacionesTool(BaseTool):
 
             success=True,
 
-            message="Consulta de obligaciones simulada."
+            message="Consulta de obligaciones simulada (MOCK)."
 
         )

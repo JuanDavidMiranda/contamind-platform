@@ -3,8 +3,7 @@ from app.ai.core.base_result import BaseResult
 from app.ai.core.base_task import BaseTask
 from app.ai.core.context import Context
 from app.ai.core.capability import Capability
-from app.ai.tools import registry
-from app.ai.tools import selector
+from app.ai.tools.registry import registry
 
 class DianAgent(BaseAgent):
 
