@@ -10,7 +10,8 @@ def test_validation_error_shape(client):
     assert response.status_code == 422
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "validation_error"
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["recoverable"] is True
     assert isinstance(body["error"]["details"], list)
 
 
@@ -19,7 +20,8 @@ def test_not_found_error_shape(client):
     assert response.status_code == 404
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "http_error"
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["recoverable"] is True
     assert body["correlation_id"] is not None
 
 
@@ -37,7 +39,8 @@ def test_unexpected_error_shape():
     assert response.status_code == 500
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "internal_error"
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["recoverable"] is False
     assert "secreto interno" not in response.text
 
 
@@ -71,7 +74,8 @@ def test_http_exception_keeps_detail(client):
     assert response.status_code == 401
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "http_error"
+    assert body["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert body["error"]["recoverable"] is True
     assert "inválidos" in body["error"]["message"]
 
 

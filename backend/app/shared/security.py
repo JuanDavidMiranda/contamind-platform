@@ -5,13 +5,11 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.models.user import User
-
-
+from app.shared.errors import app_error
 def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
@@ -66,7 +64,7 @@ def create_access_token(user: User) -> str:
 
 def get_current_user(authorization: str | None, db: Session) -> User:
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de acceso requerido.")
+        raise app_error("AUTH_MISSING_TOKEN")
 
     try:
         header, payload, signature = authorization.removeprefix("Bearer ").split(".")
@@ -75,14 +73,13 @@ def get_current_user(authorization: str | None, db: Session) -> User:
         )
         if not hmac.compare_digest(signature, expected):
             raise ValueError("Firma inválida")
-
         claims = json.loads(_decode(payload))
         if int(claims["exp"]) <= int(datetime.now(timezone.utc).timestamp()):
-            raise ValueError("Token vencido")
+            raise app_error("AUTH_EXPIRED_TOKEN")
         user = db.get(User, int(claims["sub"]))
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido.") from None
+        raise app_error("AUTH_INVALID_TOKEN") from None
 
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado.")
+        raise app_error("AUTH_INVALID_TOKEN", message="Usuario no encontrado.")
     return user
