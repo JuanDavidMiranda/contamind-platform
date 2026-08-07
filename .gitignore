@@ -1,4 +1,20 @@
 
-# Python cache
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Entornos y secretos
+.env
+.env.*
+!.env.example
+
+# Pruebas y cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Bases de datos locales
+*.db
+*.sqlite3
