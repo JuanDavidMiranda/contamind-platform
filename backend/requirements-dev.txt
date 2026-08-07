@@ -1,0 +1,10 @@
+-r requirements.txt
+
+# Calidad (Fase 0): solo reglas E9,F de Ruff (errores reales de sintaxis,
+# nombres no definidos e imports inválidos). No se impone reforma de estilo.
+ruff==0.16.1
+
+# Testing
+httpx2==2.9.1
+pytest==9.1.1
+pytest-asyncio==1.4.0

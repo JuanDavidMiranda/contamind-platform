@@ -1,5 +1,3 @@
-import pytest
-
 from app.ai.bootstrap.bootstrap import bootstrap
 from app.ai.tools.registry import registry
 

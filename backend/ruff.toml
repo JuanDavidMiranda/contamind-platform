@@ -1,0 +1,14 @@
+# Configuración de Ruff para Fase 0.
+# Reglas mínimas E9,F: detectan errores reales (sintaxis, nombres no
+# definidos, imports inválidos/no utilizados). NO se impone reforma de
+# estilo ni autofix sobre el código existente.
+target-version = "py313"
+line-length = 100
+
+[lint]
+select = ["E9", "F"]
+exclude = [
+    "alembic/versions",
+    ".venv",
+    "__pycache__",
+]
