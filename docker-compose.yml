@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: contamind-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-contamind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contamind}
+      POSTGRES_DB: ${POSTGRES_DB:-contamind}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - contamind_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-contamind} -d ${POSTGRES_DB:-contamind}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  contamind_pgdata:
