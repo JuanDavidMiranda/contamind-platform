@@ -1,4 +1,8 @@
+import pytest
+
 from app.config.settings import settings
+
+pytestmark = pytest.mark.integration
 
 
 def test_root_endpoint(client):

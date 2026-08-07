@@ -2,6 +2,8 @@ import pytest
 
 from app.config.settings import Settings
 
+pytestmark = pytest.mark.unit
+
 
 def test_development_generates_ephemeral_secret():
     settings = Settings(

@@ -1,8 +1,11 @@
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.shared.errors import AppError, register_exception_handlers
 from app.shared.logging import RequestLoggingMiddleware
+
+pytestmark = pytest.mark.integration
 
 
 def test_validation_error_shape(client):

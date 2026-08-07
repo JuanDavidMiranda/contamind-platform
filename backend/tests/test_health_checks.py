@@ -1,4 +1,8 @@
+import pytest
+
 import app.api.v1.health as health_module
+
+pytestmark = pytest.mark.integration
 
 
 def test_live_endpoint_returns_ok(client):

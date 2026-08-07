@@ -1,3 +1,8 @@
+import pytest
+
+pytestmark = pytest.mark.integration
+
+
 def _chat(client, message: str, session_id: str):
     return client.post(
         "/api/v1/chat",

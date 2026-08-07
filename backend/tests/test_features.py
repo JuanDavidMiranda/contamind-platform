@@ -1,7 +1,11 @@
+import pytest
+
 from app.ai.bootstrap import bootstrap as bootstrap_module
 from app.ai.tools.registry import ToolRegistry
 from app.config import features
 from app.config.settings import settings
+
+pytestmark = pytest.mark.unit
 
 
 def test_feature_flags_default_disabled():

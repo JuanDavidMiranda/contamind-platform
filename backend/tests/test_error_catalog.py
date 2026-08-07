@@ -1,4 +1,8 @@
+import pytest
+
 from app.shared.error_catalog import ERROR_CATALOG, get_error_definition
+
+pytestmark = pytest.mark.unit
 
 REQUIRED_CODES = {
     "VALIDATION_ERROR",

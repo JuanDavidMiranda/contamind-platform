@@ -1,6 +1,10 @@
+import pytest
+
 from app.ai.core.context import Context
 from app.ai.session import session_manager
 from app.ai.session.manager import SessionManager, SessionStore
+
+pytestmark = pytest.mark.unit
 
 
 def test_get_creates_context_when_missing():
