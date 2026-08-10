@@ -33,7 +33,9 @@ class DataSourceService:
         self._csv_importer = CsvPartyImportSource()
         self._xlsx_importer = XlsxPartyImportSource()
 
-    def create_source(self, source: CompanyDataSource) -> CompanyDataSource:
+    def create_source(
+        self, source: CompanyDataSource, *, actor_user_id: int | None = None
+    ) -> CompanyDataSource:
         self._db.add(
             CompanyDataSourceRecord(
                 id=str(source.id),
@@ -47,6 +49,7 @@ class DataSourceService:
                 provider_id=source.provider_id,
                 credential_reference=source.credential_reference,
                 status=source.status.value,
+                created_by_user_id=actor_user_id,
                 last_synced_at=source.last_synced_at,
             )
         )
@@ -87,6 +90,7 @@ class DataSourceService:
         profile_id: UUID,
         content: bytes,
         uploaded_format: FileFormat | None = None,
+        actor_user_id: int | None = None,
     ) -> tuple[UUID, PartyImportResult]:
         source = self._get_source(data_source_id)
         profile = self._get_profile(profile_id)
@@ -117,7 +121,8 @@ class DataSourceService:
             result = await self._xlsx_importer.import_parties(context, source, profile, content)
 
         persisted_parties = tuple(
-            self._upsert_party(source.id, party) for party in result.parties
+            self._upsert_party(source.id, party, actor_user_id=actor_user_id)
+            for party in result.parties
         )
         batch_id = uuid4()
         self._db.add(
@@ -131,6 +136,7 @@ class DataSourceService:
                 accepted_rows=len(persisted_parties),
                 rejected_rows=len(result.rejections),
                 correlation_id=context.correlation_id,
+                created_by_user_id=actor_user_id,
             )
         )
         self._db.commit()
@@ -149,6 +155,7 @@ class DataSourceService:
         city: str | None = None,
         address: str | None = None,
         fiscal_responsibility: str | None = None,
+        actor_user_id: int | None = None,
     ) -> Party:
         """Registra o actualiza un tercero desde una fuente manual de la empresa."""
 
@@ -170,7 +177,7 @@ class DataSourceService:
             address=address,
             fiscal_responsibility=fiscal_responsibility,
         )
-        persisted_party = self._upsert_party(source.id, party)
+        persisted_party = self._upsert_party(source.id, party, actor_user_id=actor_user_id)
         self._db.commit()
         return persisted_party
 
@@ -210,7 +217,9 @@ class DataSourceService:
             last_synced_at=record.last_synced_at,
         )
 
-    def _upsert_party(self, data_source_id: UUID, party: Party) -> Party:
+    def _upsert_party(
+        self, data_source_id: UUID, party: Party, *, actor_user_id: int | None = None
+    ) -> Party:
         filters = [PartyRecord.company_id == str(party.company_id)]
         if party.external_id:
             filters.append(PartyRecord.external_id == party.external_id)
@@ -222,22 +231,36 @@ class DataSourceService:
                 ]
             )
         else:
-            return self._create_party(data_source_id, party)
+            return self._create_party(data_source_id, party, actor_user_id=actor_user_id)
 
         record = self._db.scalar(select(PartyRecord).where(and_(*filters)))
         if record is None:
-            return self._create_party(data_source_id, party)
-        self._copy_party_to_record(record, data_source_id, party)
+            return self._create_party(data_source_id, party, actor_user_id=actor_user_id)
+        self._copy_party_to_record(record, data_source_id, party, actor_user_id=actor_user_id)
         return party.model_copy(update={"id": UUID(record.id)})
 
-    def _create_party(self, data_source_id: UUID, party: Party) -> Party:
-        record = PartyRecord(id=str(party.id), company_id=str(party.company_id), party_type=party.party_type.value, name=party.name)
-        self._copy_party_to_record(record, data_source_id, party)
+    def _create_party(
+        self, data_source_id: UUID, party: Party, *, actor_user_id: int | None = None
+    ) -> Party:
+        record = PartyRecord(
+            id=str(party.id),
+            company_id=str(party.company_id),
+            party_type=party.party_type.value,
+            name=party.name,
+            created_by_user_id=actor_user_id,
+        )
+        self._copy_party_to_record(record, data_source_id, party, actor_user_id=actor_user_id)
         self._db.add(record)
         return party
 
     @staticmethod
-    def _copy_party_to_record(record: PartyRecord, data_source_id: UUID, party: Party) -> None:
+    def _copy_party_to_record(
+        record: PartyRecord,
+        data_source_id: UUID,
+        party: Party,
+        *,
+        actor_user_id: int | None = None,
+    ) -> None:
         record.data_source_id = str(data_source_id)
         record.party_type = party.party_type.value
         record.name = party.name
@@ -250,3 +273,4 @@ class DataSourceService:
         record.fiscal_responsibility = party.fiscal_responsibility
         record.external_id = party.external_id
         record.integration_id = party.integration_id
+        record.updated_by_user_id = actor_user_id

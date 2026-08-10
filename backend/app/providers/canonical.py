@@ -79,12 +79,18 @@ class Tenant(CanonicalModel):
     country_code: str = Field(default="CO", pattern=r"^[A-Z]{2}$")
 
 
+class CompanyStatus(str, Enum):
+    ACTIVE = "active"
+    DISABLED = "disabled"
+
+
 class Company(CanonicalModel):
     id: UUID = Field(default_factory=uuid4)
     tenant_id: UUID
     name: str = Field(min_length=1, max_length=255)
     functional_currency: str = Field(default="COP", pattern=r"^[A-Z]{3}$")
     provider_company_id: str | None = Field(default=None, max_length=255)
+    status: CompanyStatus = CompanyStatus.ACTIVE
 
 
 class ProviderDescriptor(CanonicalModel):

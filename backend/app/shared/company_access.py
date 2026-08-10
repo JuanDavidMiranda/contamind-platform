@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.organization import CompanyRecord, TenantMembership, TenantRole
 from app.models.user import CompanyMembership, CompanyRole, User
 from app.shared.errors import app_error
 
@@ -27,6 +28,29 @@ def get_company_membership(
     )
 
 
+def is_tenant_owner(user: User, db: Session, tenant_id: UUID) -> bool:
+    if user.is_platform_admin:
+        return True
+    return (
+        db.scalar(
+            select(TenantMembership.id).where(
+                TenantMembership.user_id == user.id,
+                TenantMembership.tenant_id == str(tenant_id),
+                TenantMembership.role == TenantRole.OWNER.value,
+            )
+        )
+        is not None
+    )
+
+
+def require_tenant_owner(user: User, db: Session, tenant_id: UUID) -> None:
+    if not is_tenant_owner(user, db, tenant_id):
+        raise app_error(
+            "FORBIDDEN",
+            message="Se requiere ser propietario del tenant para esta operación.",
+        )
+
+
 def require_company_role(
     user: User,
     db: Session,
@@ -41,6 +65,18 @@ def require_company_role(
 
     if user.is_platform_admin:
         return None
+
+    tenant_membership = db.scalar(
+        select(TenantMembership.id)
+        .join(CompanyRecord, CompanyRecord.tenant_id == TenantMembership.tenant_id)
+        .where(
+            TenantMembership.user_id == user.id,
+            TenantMembership.role == TenantRole.OWNER.value,
+            CompanyRecord.id == str(company_id),
+        )
+    )
+    if tenant_membership is not None:
+        return CompanyRole.OWNER
 
     membership = get_company_membership(db, user_id=user.id, company_id=company_id)
     if membership is None:
@@ -63,4 +99,3 @@ def require_company_role(
             message="Tu rol no permite realizar esta operación en la empresa.",
         )
     return role
-

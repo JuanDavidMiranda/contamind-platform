@@ -42,7 +42,9 @@ class CompanyMembership(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    company_id: Mapped[str] = mapped_column(String(36), index=True)
+    company_id: Mapped[str] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
     role: Mapped[str] = mapped_column(String(20), default=CompanyRole.OPERATOR.value)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

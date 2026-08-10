@@ -22,6 +22,7 @@ from app.data_sources.models import (
 from app.database.database import get_db
 from app.models.user import User
 from app.providers.canonical import Party, PartyType
+from app.services.company_service import CompanyService
 from app.services.data_source_service import DataSourceService
 from app.shared.company_access import (
     MANAGE_SOURCES_ROLES,
@@ -84,6 +85,8 @@ def _source_for_role(
     allowed_roles,
 ) -> CompanyDataSource:
     source = DataSourceService(db).get_source(data_source_id)
+    CompanyService(db).require_company_in_tenant(source.company_id, source.tenant_id)
+    CompanyService(db).require_active_company(source.company_id)
     require_company_role(user, db, source.company_id, allowed_roles)
     return source
 
@@ -95,8 +98,12 @@ def create_data_source(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
+    CompanyService(db).require_company_in_tenant(payload.company_id, payload.tenant_id)
+    CompanyService(db).require_active_company(payload.company_id)
     require_company_role(user, db, payload.company_id, MANAGE_SOURCES_ROLES)
-    return DataSourceService(db).create_source(CompanyDataSource(**payload.model_dump()))
+    return DataSourceService(db).create_source(
+        CompanyDataSource(**payload.model_dump()), actor_user_id=user.id
+    )
 
 
 @router.get("", response_model=list[CompanyDataSource])
@@ -106,6 +113,7 @@ def list_data_sources(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
+    CompanyService(db).get_company(company_id)
     require_company_role(user, db, company_id, VIEW_COMPANY_ROLES)
     return DataSourceService(db).list_sources(company_id)
 
@@ -145,7 +153,11 @@ async def import_parties(
         raise app_error("VALIDATION_ERROR", message="Solo se admiten archivos CSV o XLSX.")
 
     batch_id, result = await DataSourceService(db).import_parties(
-        data_source_id, profile_id, content, uploaded_format=formats_by_extension[extension]
+        data_source_id,
+        profile_id,
+        content,
+        uploaded_format=formats_by_extension[extension],
+        actor_user_id=user.id,
     )
     return PartyImportResponse(
         batch_id=batch_id,
@@ -165,4 +177,6 @@ def capture_manual_party(
 
     user = _current_user(authorization, db)
     _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
-    return DataSourceService(db).capture_manual_party(data_source_id, **payload.model_dump())
+    return DataSourceService(db).capture_manual_party(
+        data_source_id, actor_user_id=user.id, **payload.model_dump()
+    )

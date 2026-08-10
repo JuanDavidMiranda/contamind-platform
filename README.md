@@ -100,3 +100,11 @@ Cada empresa configura una o varias fuentes de datos: software contable conectad
 ### Acceso por empresa
 
 El acceso a datos se controla mediante membresías por empresa: `owner`, `admin`, `operator` y `viewer`. Un operador puede importar y capturar información únicamente dentro de las fuentes de las empresas donde es miembro; no puede configurarlas. Los administradores de plataforma se reservan para soporte y para asignar el primer propietario. Ver `backend/docs/adr/0010-rbac-y-membresias-por-empresa.md`.
+
+### Onboarding de empresas
+
+`POST /api/v1/companies/onboarding` crea un tenant, su primera empresa y la membresía `owner` del usuario autenticado en una sola transacción. `GET /api/v1/companies/mine` lista exclusivamente las empresas disponibles para ese usuario. Fuentes y membresías verifican que la empresa exista y cada fuente, lote de importación y tercero guarda la referencia del usuario que lo creó o actualizó. Ver `backend/docs/adr/0011-empresas-persistidas-y-onboarding.md`.
+
+### Ciclo de vida multiempresa
+
+El propietario de un tenant puede crear razones sociales adicionales con `POST /api/v1/tenants/{tenant_id}/companies`. Las empresas se editan, desactivan o reactivan sin borrarlas; una empresa desactivada no acepta nuevas configuraciones, importaciones ni capturas. `GET /api/v1/companies/{company_id}/audit` expone la trazabilidad de fuentes, importaciones y capturas manuales para los miembros autorizados. Ver `backend/docs/adr/0012-ciclo-de-vida-multiempresa-por-tenant.md`.

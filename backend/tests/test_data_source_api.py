@@ -34,8 +34,14 @@ def _admin_token() -> str:
 def test_admin_can_configure_and_import_csv_parties(client):
     token = _admin_token()
     headers = {"Authorization": f"Bearer {token}"}
-    tenant_id = str(uuid4())
-    company_id = str(uuid4())
+    onboarding_response = client.post(
+        "/api/v1/companies/onboarding",
+        headers=headers,
+        json={"tenant_name": "Tenant API", "company_name": "Empresa API"},
+    )
+    assert onboarding_response.status_code == 201
+    tenant_id = onboarding_response.json()["tenant"]["id"]
+    company_id = onboarding_response.json()["company"]["id"]
     source_response = client.post(
         "/api/v1/admin/data-sources",
         headers=headers,

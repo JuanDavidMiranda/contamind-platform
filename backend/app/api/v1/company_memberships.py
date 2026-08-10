@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database.database import get_db
 from app.models.user import CompanyMembership, CompanyRole, User
+from app.services.company_service import CompanyService
 from app.shared.company_access import MANAGE_MEMBERSHIPS_ROLES, require_company_role
 from app.shared.errors import app_error
 from app.shared.security import get_current_user
@@ -51,6 +52,7 @@ def upsert_membership(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
+    CompanyService(db).get_company(payload.company_id)
     _require_membership_manager(user, db, payload.company_id)
     if db.get(User, payload.user_id) is None:
         raise app_error("NOT_FOUND", message="Usuario no encontrado.")
@@ -82,6 +84,7 @@ def list_memberships(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
+    CompanyService(db).get_company(company_id)
     _require_membership_manager(user, db, company_id)
     memberships = db.scalars(
         select(CompanyMembership)
@@ -99,6 +102,7 @@ def delete_membership(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
+    CompanyService(db).get_company(company_id)
     _require_membership_manager(user, db, company_id)
     membership = db.scalar(
         select(CompanyMembership).where(
@@ -110,4 +114,3 @@ def delete_membership(
         raise app_error("NOT_FOUND", message="Membresía no encontrada.")
     db.delete(membership)
     db.commit()
-

@@ -6,6 +6,7 @@ from app.api.router import api_router
 from app.config.settings import settings
 from app.database import Base, engine
 from app.models import data_source as data_source_models  # noqa: F401  (registra modelos para create_all)
+from app.models import organization as organization_models  # noqa: F401  (registra modelos para create_all)
 from app.models import user as user_models  # noqa: F401  (registra modelos para create_all)
 from app.shared.errors import register_exception_handlers
 from app.shared.logging import RequestLoggingMiddleware, configure_logging

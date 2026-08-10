@@ -58,6 +58,9 @@ def test_migrations_apply_on_empty_database():
                 assert {
                     "users",
                     "subscriptions",
+                    "tenants",
+                    "companies",
+                    "tenant_memberships",
                     "company_memberships",
                     "company_data_sources",
                     "import_profiles",
