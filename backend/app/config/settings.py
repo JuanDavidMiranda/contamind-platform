@@ -2,6 +2,7 @@ import secrets
 from functools import lru_cache
 from typing import Literal
 
+from cryptography.fernet import Fernet
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,6 +25,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = "contamind"
     POSTGRES_DB: str = "contamind"
     AUTH_SECRET_KEY: str | None = None
+    PROVIDER_CREDENTIALS_MASTER_KEY: str | None = None
     AUTH_TOKEN_TTL_MINUTES: int = 480
     PLATFORM_ADMIN_EMAILS: str = ""
     FEATURE_FLAGS: dict[str, bool] = {}
@@ -50,6 +52,18 @@ class Settings(BaseSettings):
                 "AUTH_SECRET_KEY es obligatoria en los ambientes "
                 "staging y production. Defínela en el entorno."
             )
+        if self.ENVIRONMENT in ("staging", "production") and not self.PROVIDER_CREDENTIALS_MASTER_KEY:
+            raise ValueError(
+                "PROVIDER_CREDENTIALS_MASTER_KEY es obligatoria en los ambientes "
+                "staging y production."
+            )
+        if self.PROVIDER_CREDENTIALS_MASTER_KEY:
+            try:
+                Fernet(self.PROVIDER_CREDENTIALS_MASTER_KEY.encode("ascii"))
+            except (UnicodeEncodeError, ValueError) as exc:
+                raise ValueError(
+                    "PROVIDER_CREDENTIALS_MASTER_KEY debe ser una clave Fernet válida."
+                ) from exc
         if self.AUTH_SECRET_KEY is None:
             self.AUTH_SECRET_KEY = secrets.token_hex(32)
         return self

@@ -3,7 +3,13 @@
 from collections.abc import Callable
 
 from app.providers.canonical import ProviderContext, ProviderId, normalize_provider_id
-from app.providers.ports import FinancialProviderPort, FiscalProviderPort, ProviderPort
+from app.providers.ports import (
+    FinancialProviderPort,
+    FiscalProviderPort,
+    ProviderConnectionPort,
+    ProviderPartySyncPort,
+    ProviderPort,
+)
 from app.shared.errors import app_error
 
 FeatureChecker = Callable[[ProviderId], bool]
@@ -46,6 +52,26 @@ class ProviderFactory:
             raise app_error(
                 "CONFLICT",
                 message="El proveedor registrado no es de tipo fiscal.",
+                details={"provider": context.provider},
+            )
+        return provider
+
+    def resolve_connection(self, context: ProviderContext) -> ProviderConnectionPort:
+        provider = self._resolve(context)
+        if not isinstance(provider, ProviderConnectionPort):
+            raise app_error(
+                "CONFLICT",
+                message="El proveedor registrado no admite prueba de conexión.",
+                details={"provider": context.provider},
+            )
+        return provider
+
+    def resolve_party_sync(self, context: ProviderContext) -> ProviderPartySyncPort:
+        provider = self._resolve(context)
+        if not isinstance(provider, ProviderPartySyncPort):
+            raise app_error(
+                "CONFLICT",
+                message="El proveedor registrado no admite sincronizar terceros.",
                 details={"provider": context.provider},
             )
         return provider

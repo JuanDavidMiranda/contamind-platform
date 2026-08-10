@@ -9,14 +9,41 @@ from app.providers.canonical import (
     Page,
     PageRequest,
     Party,
+    PartySyncPage,
     ProviderContext,
     ProviderId,
 )
+from app.providers.secrets import ProviderSecret
 
 
 class ProviderPort(ABC):
     provider: ProviderId
     canonical_version: str = CANONICAL_VERSION
+
+
+class ProviderConnectionPort(ProviderPort):
+    """Capacidad para validar credenciales sin revelar ningún secreto."""
+
+    @abstractmethod
+    async def test_connection(
+        self, context: ProviderContext, secret: ProviderSecret
+    ) -> None:
+        """Comprueba la autenticación con el mecanismo nativo del proveedor."""
+
+
+class ProviderPartySyncPort(ProviderPort):
+    """Lectura paginada de terceros para una sincronización por cursor."""
+
+    @abstractmethod
+    async def fetch_parties(
+        self,
+        context: ProviderContext,
+        secret: ProviderSecret,
+        *,
+        cursor: str | None,
+        page_size: int,
+    ) -> PartySyncPage:
+        """Obtiene una página canónica sin persistir ni aplicar reglas de negocio."""
 
 
 class FinancialProviderPort(ProviderPort):

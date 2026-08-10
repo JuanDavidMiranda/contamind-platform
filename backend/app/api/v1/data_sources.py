@@ -3,8 +3,10 @@
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
-from pydantic import BaseModel, Field
+import re
+
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
+from pydantic import BaseModel, Field, SecretStr, field_validator
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
@@ -18,12 +20,14 @@ from app.data_sources.models import (
     ImportEntity,
     ImportProfile,
     ImportRejection,
+    ProviderOperationResult,
 )
 from app.database.database import get_db
 from app.models.user import User
 from app.providers.canonical import Party, PartyType
 from app.services.company_service import CompanyService
 from app.services.data_source_service import DataSourceService
+from app.services.provider_connection_service import ProviderConnectionService
 from app.shared.company_access import (
     MANAGE_SOURCES_ROLES,
     OPERATE_SOURCES_ROLES,
@@ -79,6 +83,35 @@ class ManualPartyCreate(BaseModel):
     city: str | None = Field(default=None, max_length=100)
     address: str | None = Field(default=None, max_length=255)
     fiscal_responsibility: str | None = Field(default=None, max_length=100)
+
+
+_CREDENTIAL_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+
+
+class ProviderCredentialsWrite(BaseModel):
+    credentials: dict[str, SecretStr] = Field(min_length=1)
+
+    @field_validator("credentials")
+    @classmethod
+    def validate_credentials(cls, value: dict[str, SecretStr]) -> dict[str, SecretStr]:
+        if any(
+            not _CREDENTIAL_KEY_PATTERN.fullmatch(key)
+            or not secret.get_secret_value()
+            or len(secret.get_secret_value()) > 4096
+            for key, secret in value.items()
+        ):
+            raise ValueError("Las credenciales contienen un campo no válido.")
+        return value
+
+    def plain_values(self) -> dict[str, str]:
+        return {key: secret.get_secret_value() for key, secret in self.credentials.items()}
+
+
+class ProviderCredentialsResponse(BaseModel):
+    data_source_id: UUID
+    provider_id: str
+    status: DataSourceStatus
+    credential_configured: bool = True
 
 
 def _current_user(authorization: str | None, db: Session) -> User:
@@ -221,3 +254,82 @@ def capture_manual_party(
     return DataSourceService(db).capture_manual_party(
         data_source_id, actor_user_id=user.id, **payload.model_dump()
     )
+
+
+@router.put("/{data_source_id}/credentials", response_model=ProviderCredentialsResponse)
+def save_provider_credentials(
+    data_source_id: UUID,
+    payload: ProviderCredentialsWrite,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Guarda o rota secretos sin devolverlos ni escribirlos en la auditoría."""
+
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    source = ProviderConnectionService(db).save_credentials(
+        data_source_id, payload.plain_values(), actor_user_id=user.id
+    )
+    assert source.provider_id is not None
+    return ProviderCredentialsResponse(
+        data_source_id=source.id,
+        provider_id=source.provider_id,
+        status=source.status,
+    )
+
+
+@router.delete("/{data_source_id}/credentials", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_provider_credentials(
+    data_source_id: UUID,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    ProviderConnectionService(db).revoke_credentials(data_source_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{data_source_id}/connection-test", response_model=ProviderOperationResult)
+async def test_provider_connection(
+    data_source_id: UUID,
+    authorization: str | None = Header(default=None),
+    x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    return await ProviderConnectionService(db).test_connection(
+        data_source_id,
+        actor_user_id=user.id,
+        correlation_id=(x_request_id or "")[:64] or None,
+    )
+
+
+@router.post("/{data_source_id}/sync/parties", response_model=ProviderOperationResult)
+async def sync_provider_parties(
+    data_source_id: UUID,
+    page_size: int = Query(default=50, ge=1, le=100),
+    authorization: str | None = Header(default=None),
+    x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
+    return await ProviderConnectionService(db).sync_parties(
+        data_source_id,
+        actor_user_id=user.id,
+        page_size=page_size,
+        correlation_id=(x_request_id or "")[:64] or None,
+    )
+
+
+@router.get("/{data_source_id}/connection-runs", response_model=list[ProviderOperationResult])
+def list_provider_connection_runs(
+    data_source_id: UUID,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, VIEW_COMPANY_ROLES)
+    return ProviderConnectionService(db).list_runs(data_source_id)

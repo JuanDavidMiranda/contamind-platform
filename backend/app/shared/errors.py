@@ -76,6 +76,9 @@ _STATUS_CODE_TO_CATALOG: dict[int, str] = {
 }
 
 _DEFAULT_HTTP_DETAILS = {"Not Found", "Forbidden", "Method Not Allowed"}
+_SENSITIVE_VALIDATION_FIELDS = frozenset(
+    {"credential", "secret", "password", "token", "access_key"}
+)
 
 
 def _correlation_id(request: Request) -> str | None:
@@ -135,10 +138,30 @@ def _handle_validation_error(request: Request, exc: RequestValidationError) -> J
             code=definition.code,
             message=definition.message,
             recoverable=definition.recoverable,
-            details=exc.errors(),
+            details=_safe_validation_errors(exc),
         ),
         definition.http_status,
     )
+
+
+def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]:
+    """Conserva ubicación y regla inválida, pero jamás el valor de un secreto."""
+
+    safe_errors: list[dict[str, Any]] = []
+    for error in exc.errors():
+        safe_error = dict(error)
+        # Pydantic puede adjuntar una excepción Python en `ctx`, que no es
+        # serializable y podría incluir datos de entrada en su representación.
+        safe_error.pop("ctx", None)
+        location = safe_error.get("loc", ())
+        if any(
+            isinstance(part, str)
+            and any(marker in part.lower() for marker in _SENSITIVE_VALIDATION_FIELDS)
+            for part in location
+        ):
+            safe_error["input"] = "***redacted***"
+        safe_errors.append(safe_error)
+    return safe_errors
 
 
 def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:

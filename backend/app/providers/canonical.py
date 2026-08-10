@@ -212,6 +212,7 @@ class ProviderContext(CanonicalModel):
     tenant_id: UUID
     company_id: UUID
     provider: ProviderId
+    data_source_id: UUID | None = None
     canonical_version: str = CANONICAL_VERSION
     correlation_id: str | None = Field(default=None, max_length=64)
 
@@ -234,3 +235,10 @@ class Page(CanonicalModel, Generic[ModelT]):
     page: int = Field(ge=1)
     page_size: int = Field(ge=1)
     total: int | None = Field(default=None, ge=0)
+
+
+class PartySyncPage(CanonicalModel):
+    """Página de terceros y cursor opaco para sincronizaciones incrementales."""
+
+    items: tuple[Party, ...]
+    next_cursor: str | None = Field(default=None, max_length=512)

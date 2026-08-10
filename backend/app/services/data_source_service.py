@@ -12,6 +12,7 @@ from app.data_sources.models import (
     CompanyDataSource,
     DataSourceContext,
     DataSourceKind,
+    DataSourceStatus,
     FileFormat,
     ImportEntity,
     ImportProfile,
@@ -37,6 +38,16 @@ class DataSourceService:
     def create_source(
         self, source: CompanyDataSource, *, actor_user_id: int | None = None
     ) -> CompanyDataSource:
+        if source.provider_id is not None:
+            source = source.model_copy(
+                update={
+                    "credential_reference": None,
+                    "status": DataSourceStatus.PENDING,
+                    "last_connection_checked_at": None,
+                    "last_synced_at": None,
+                    "last_sync_cursor": None,
+                }
+            )
         self._db.add(
             CompanyDataSourceRecord(
                 id=str(source.id),
@@ -51,7 +62,9 @@ class DataSourceService:
                 credential_reference=source.credential_reference,
                 status=source.status.value,
                 created_by_user_id=actor_user_id,
+                last_connection_checked_at=source.last_connection_checked_at,
                 last_synced_at=source.last_synced_at,
+                last_sync_cursor=source.last_sync_cursor,
             )
         )
         self._db.commit()
@@ -224,6 +237,23 @@ class DataSourceService:
         self._db.commit()
         return persisted_party
 
+    def upsert_provider_party(
+        self,
+        data_source_id: UUID,
+        party: Party,
+        *,
+        actor_user_id: int,
+    ) -> Party:
+        """Persiste un tercero ya normalizado por un adaptador de proveedor."""
+
+        source = self._get_source(data_source_id)
+        if party.company_id != source.company_id:
+            raise app_error(
+                "CONFLICT",
+                message="El tercero retornado no pertenece a la empresa de la fuente.",
+            )
+        return self._upsert_party(data_source_id, party, actor_user_id=actor_user_id)
+
     def _get_source(self, source_id: UUID) -> CompanyDataSource:
         record = self._db.get(CompanyDataSourceRecord, str(source_id))
         if record is None:
@@ -257,7 +287,9 @@ class DataSourceService:
             provider_id=record.provider_id,
             credential_reference=record.credential_reference,
             status=record.status,
+            last_connection_checked_at=record.last_connection_checked_at,
             last_synced_at=record.last_synced_at,
+            last_sync_cursor=record.last_sync_cursor,
         )
 
     def _upsert_party(

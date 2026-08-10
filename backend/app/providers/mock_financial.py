@@ -10,14 +10,15 @@ from app.providers.canonical import (
     Page,
     PageRequest,
     Party,
+    PartySyncPage,
     PartyType,
     ProviderContext,
     ProviderId,
     ProviderKind,
     normalize_provider_id,
 )
-from app.providers.ports import FinancialProviderPort
-from app.providers.secrets import SecretStore
+from app.providers.ports import FinancialProviderPort, ProviderConnectionPort, ProviderPartySyncPort
+from app.providers.secrets import ProviderSecret, SecretStore
 from app.shared.errors import app_error
 
 
@@ -29,7 +30,9 @@ class ProviderAuditEvent:
     correlation_id: str | None
 
 
-class MockFinancialProvider(FinancialProviderPort):
+class MockFinancialProvider(
+    FinancialProviderPort, ProviderConnectionPort, ProviderPartySyncPort
+):
     """Contrato de referencia para tests de adaptadores y mapeos canónicos."""
 
     canonical_version = CANONICAL_VERSION
@@ -60,6 +63,30 @@ class MockFinancialProvider(FinancialProviderPort):
             )
         self._audit(context, "authenticate")
         return "mock-authenticated-transport"
+
+    async def test_connection(self, context: ProviderContext, secret: ProviderSecret) -> None:
+        del secret
+        self._audit(context, "test_connection")
+
+    async def fetch_parties(
+        self,
+        context: ProviderContext,
+        secret: ProviderSecret,
+        *,
+        cursor: str | None,
+        page_size: int,
+    ) -> PartySyncPage:
+        del secret
+        try:
+            page_number = int(cursor) if cursor else 1
+        except ValueError as exc:
+            raise app_error("CONFLICT", message="El cursor del proveedor no es válido.") from exc
+        page = await self.list_parties(
+            context, PageRequest(page=page_number, page_size=page_size)
+        )
+        next_cursor = str(page_number + 1) if page.total and page_number * page_size < page.total else None
+        self._audit(context, "fetch_parties")
+        return PartySyncPage(items=page.items, next_cursor=next_cursor)
 
     def register_party(self, context: ProviderContext, party: Party) -> None:
         self._assert_company(context, party.company_id)

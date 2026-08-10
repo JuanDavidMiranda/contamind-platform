@@ -73,6 +73,8 @@ def test_migrations_apply_on_empty_database():
                     "payments",
                     "journal_entries",
                     "journal_entry_lines",
+                    "provider_credentials",
+                    "provider_sync_runs",
                 } <= tables
                 version = connection.execute(
                     text("SELECT version_num FROM alembic_version")

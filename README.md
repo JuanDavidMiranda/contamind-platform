@@ -85,7 +85,7 @@ Los logs de acceso y errores son JSON por línea e incluyen `request_id` (propag
 
 - Fase 0 (cerrada): arranque limpio, imports, workflow de chat/exógena, pruebas (61 verdes, incluye PostgreSQL), config segura, Alembic, PostgreSQL en contenedor, catálogo de errores estable, health checks live/ready, sesiones con TTL/LRU e interfaz reemplazable, logging estructurado, feature flags y tooling Ruff/markers. Ver `backend/docs/checkpoint1-fase0.md` y `backend/docs/cierre-fase0.md`.
 - Fase 1 (spike de viabilidad DIAN/Siigo/Alegra/World Office — documental, sin código productivo): arquitectura de proveedores neutral (ADR-0001), vertical DIAN con GetAcquirer como primer piloto (ADR-0002), evaluación de Siigo/Alegra/World Office (ADR-0003/0004/0005), modelo contable canónico (ADR-0006) y estrategia de autenticación transversal (ADR-0007). Ver `backend/docs/adr/` y `backend/docs/spike-fase1.md`.
-- Pendiente: Fase 2 (infraestructura de proveedores: ports, modelo canónico, contracts), Fase 3 (primer adaptador financiero), Fase 4 (primer vertical DIAN), multiempresa/multiagente y módulos de negocio. Las integraciones reales requieren credenciales de los proveedores (los nombres previstos de variables están documentados en los ADR, no en `.env.example`).
+- Pendiente: ampliar adaptadores financieros y el vertical DIAN, ejecutar sincronizaciones en segundo plano para grandes volúmenes, multiagente y módulos de negocio. Las integraciones reales requieren credenciales y autorizaciones de los proveedores.
 
 ### Arquitectura multi-proveedor
 
@@ -116,3 +116,9 @@ Las fuentes manuales activas pueden registrar impuestos, ítems, facturas, pagos
 ### Importación contable CSV/XLSX
 
 Las fuentes de archivos pueden importar impuestos, ítems, facturas, pagos y comprobantes con perfiles de mapeo por entidad. Las facturas y comprobantes agrupan sus líneas, resuelven referencias por código o documento y registran rechazos por fila sin descartar el lote completo. Ver `backend/docs/adr/0014-importacion-tabular-del-nucleo-contable.md`.
+
+### Conexiones externas y sincronización
+
+Las fuentes con proveedor se crean en estado `pending`. Un administrador configura credenciales mediante `PUT /api/v1/data-sources/{id}/credentials` y ejecuta `POST /api/v1/data-sources/{id}/connection-test`; solo una prueba exitosa habilita la fuente. Las credenciales se almacenan cifradas con Fernet y jamás aparecen en respuestas o auditorías.
+
+`POST /api/v1/data-sources/{id}/sync/parties` sincroniza una página de terceros y conserva el cursor para la siguiente ejecución. Cada prueba y sincronización queda en `GET /api/v1/data-sources/{id}/connection-runs`, con actor, correlación, cursor, conteo y código de error, sin payloads sensibles. La primera referencia de API es Siigo, protegida por `SIIGO_INTEGRATION_ENABLED`; no hay proveedor prioritario y los conectores por archivo, agente local o base de datos usan el mismo ciclo. Ver `backend/docs/adr/0015-ciclo-de-vida-de-conexiones-externas.md`.

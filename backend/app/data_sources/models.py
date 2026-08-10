@@ -35,6 +35,16 @@ class DataSourceStatus(str, Enum):
     DISABLED = "disabled"
 
 
+class ProviderOperation(str, Enum):
+    CONNECTION_TEST = "connection_test"
+    SYNC_PARTIES = "sync_parties"
+
+
+class ProviderRunStatus(str, Enum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 class DataCapability(str, Enum):
     PARTIES = "parties"
     TAXES = "taxes"
@@ -85,7 +95,9 @@ class CompanyDataSource(CanonicalModel):
     provider_id: str | None = Field(default=None, max_length=64)
     credential_reference: str | None = Field(default=None, max_length=255)
     status: DataSourceStatus = DataSourceStatus.PENDING
+    last_connection_checked_at: datetime | None = None
     last_synced_at: datetime | None = None
+    last_sync_cursor: str | None = Field(default=None, max_length=512)
 
     @field_validator("connector_id", "provider_id", mode="before")
     @classmethod
@@ -151,3 +163,17 @@ class ImportAuditEvent(CanonicalModel):
     accepted_rows: int = Field(ge=0)
     rejected_rows: int = Field(ge=0)
     correlation_id: str | None = Field(default=None, max_length=64)
+
+
+class ProviderOperationResult(CanonicalModel):
+    id: UUID
+    data_source_id: UUID
+    provider_id: str
+    operation: ProviderOperation
+    status: ProviderRunStatus
+    processed_records: int = Field(ge=0)
+    cursor_before: str | None = None
+    cursor_after: str | None = None
+    error_code: str | None = None
+    correlation_id: str | None = None
+    completed_at: datetime

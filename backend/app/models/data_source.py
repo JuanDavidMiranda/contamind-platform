@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -25,11 +25,67 @@ class CompanyDataSourceRecord(Base):
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True
     )
+    last_connection_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_sync_cursor: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class ProviderCredentialRecord(Base):
+    """Secreto cifrado y aislado por fuente; nunca conserva valores en claro."""
+
+    __tablename__ = "provider_credentials"
+    __table_args__ = (
+        UniqueConstraint("data_source_id", name="uq_provider_credentials_data_source"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    data_source_id: Mapped[str] = mapped_column(
+        ForeignKey("company_data_sources.id", ondelete="CASCADE"), index=True
+    )
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    company_id: Mapped[str] = mapped_column(ForeignKey("companies.id"), index=True)
+    provider_id: Mapped[str] = mapped_column(String(64), index=True)
+    ciphertext: Mapped[str] = mapped_column(Text)
+    key_version: Mapped[str] = mapped_column(String(32))
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProviderSyncRunRecord(Base):
+    """Bitácora sin payload para pruebas de conexión y sincronizaciones."""
+
+    __tablename__ = "provider_sync_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    data_source_id: Mapped[str] = mapped_column(
+        ForeignKey("company_data_sources.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[str] = mapped_column(ForeignKey("companies.id"), index=True)
+    provider_id: Mapped[str] = mapped_column(String(64), index=True)
+    operation: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    cursor_before: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cursor_after: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    processed_records: Mapped[int] = mapped_column(Integer, default=0)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ImportProfileRecord(Base):

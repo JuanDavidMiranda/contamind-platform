@@ -43,11 +43,16 @@ class InMemorySecretStore(SecretStore):
     """Store efímero para pruebas. No es apto para producción ni reinicios."""
 
     def __init__(self) -> None:
-        self._secrets: dict[tuple[str, str, ProviderId], ProviderSecret] = {}
+        self._secrets: dict[tuple[str, str, str | None, ProviderId], ProviderSecret] = {}
 
     @staticmethod
-    def _key(context: ProviderContext) -> tuple[str, str, ProviderId]:
-        return (str(context.tenant_id), str(context.company_id), context.provider)
+    def _key(context: ProviderContext) -> tuple[str, str, str | None, ProviderId]:
+        return (
+            str(context.tenant_id),
+            str(context.company_id),
+            str(context.data_source_id) if context.data_source_id else None,
+            context.provider,
+        )
 
     def get(self, context: ProviderContext) -> ProviderSecret | None:
         return self._secrets.get(self._key(context))
