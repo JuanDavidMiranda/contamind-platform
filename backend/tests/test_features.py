@@ -16,10 +16,12 @@ def test_feature_flags_default_disabled():
 def test_enabled_features_exposes_known_flags():
     result = features.enabled_features()
     assert set(result) == {
+        "ALEGRA_INTEGRATION_ENABLED",
         "DIAN_INTEGRATION_ENABLED",
         "SIIGO_INTEGRATION_ENABLED",
         "LLM_ENABLED",
         "MOCK_EXTERNAL_SERVICES",
+        "WORLDOFFICE_INTEGRATION_ENABLED",
     }
 
 
@@ -37,6 +39,20 @@ def test_mock_default_is_enabled():
         features.is_enabled(features.FEATURE_MOCK_EXTERNAL_SERVICES, default=True)
         is True
     )
+
+
+def test_provider_flags_are_disabled_by_default():
+    assert features.is_provider_enabled("alegra") is False
+    assert features.is_provider_enabled("worldoffice_cloud") is False
+
+
+def test_is_provider_enabled_reads_provider_feature_flag(monkeypatch):
+    monkeypatch.setattr(
+        settings,
+        "FEATURE_FLAGS",
+        {features.FEATURE_ALEGRA_INTEGRATION: True},
+    )
+    assert features.is_provider_enabled("alegra") is True
 
 
 def test_bootstrap_registers_mock_when_enabled(monkeypatch):

@@ -70,6 +70,30 @@ ERROR_CATALOG: dict[str, ErrorDefinition] = {
         message="El servicio no está disponible temporalmente.",
         recoverable=True,
     ),
+    "PROVIDER_AUTH_FAILED": ErrorDefinition(
+        code="PROVIDER_AUTH_FAILED",
+        http_status=401,
+        message="No fue posible autenticar con el proveedor.",
+        recoverable=True,
+    ),
+    "PROVIDER_RATE_LIMITED": ErrorDefinition(
+        code="PROVIDER_RATE_LIMITED",
+        http_status=429,
+        message="El proveedor alcanzó su límite de solicitudes.",
+        recoverable=True,
+    ),
+    "PROVIDER_UNREACHABLE": ErrorDefinition(
+        code="PROVIDER_UNREACHABLE",
+        http_status=503,
+        message="No fue posible comunicarse con el proveedor.",
+        recoverable=True,
+    ),
+    "PROVIDER_ERROR": ErrorDefinition(
+        code="PROVIDER_ERROR",
+        http_status=502,
+        message="El proveedor respondió con un error.",
+        recoverable=True,
+    ),
     "INTERNAL_ERROR": ErrorDefinition(
         code="INTERNAL_ERROR",
         http_status=500,
