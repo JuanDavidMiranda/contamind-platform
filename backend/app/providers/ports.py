@@ -33,7 +33,13 @@ class FinancialProviderPort(ProviderPort):
         """Lista terceros usando la paginación nativa del adaptador."""
 
     @abstractmethod
-    async def create_invoice(self, context: ProviderContext, invoice: Invoice) -> Invoice:
+    async def create_invoice(
+        self,
+        context: ProviderContext,
+        invoice: Invoice,
+        *,
+        idempotency_key: str | None = None,
+    ) -> Invoice:
         """Crea una factura canónica e informa sus identificadores externos."""
 
     @abstractmethod

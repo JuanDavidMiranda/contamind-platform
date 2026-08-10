@@ -35,7 +35,7 @@ class _FinancialStub(FinancialProviderPort):
     async def list_parties(self, context, page):
         return Page(items=(), page=page.page, page_size=page.page_size, total=0)
 
-    async def create_invoice(self, context, invoice):
+    async def create_invoice(self, context, invoice, *, idempotency_key=None):
         return invoice
 
     async def list_journal_entries(self, context, page):
