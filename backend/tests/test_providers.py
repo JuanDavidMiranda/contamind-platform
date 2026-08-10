@@ -15,8 +15,11 @@ from app.providers.canonical import (
     PageRequest,
     Party,
     PartyType,
+    ProviderDescriptor,
+    ProviderCapability,
     ProviderContext,
     ProviderKind,
+    IntegrationMode,
 )
 from app.providers.factory import ProviderFactory
 from app.providers.ports import FinancialProviderPort, FiscalProviderPort
@@ -128,3 +131,25 @@ def test_factory_rejects_incompatible_canonical_major_version():
     with pytest.raises(AppError) as error:
         factory.resolve_financial(_context(version="1.1.0"))
     assert error.value.code == "CONFLICT"
+
+
+def test_provider_descriptor_accepts_configurable_provider_id():
+    descriptor = ProviderDescriptor(
+        provider_id="Acme_Erp",
+        display_name="Acme ERP",
+        mode=IntegrationMode.CLOUD_API,
+        capabilities={ProviderCapability.PARTIES, ProviderCapability.INVOICES},
+    )
+
+    assert descriptor.provider_id == "acme_erp"
+
+
+def test_factory_resolves_provider_outside_known_catalog():
+    adapter = _FinancialStub()
+    adapter.provider = "acme_erp"
+    factory = ProviderFactory()
+    factory.register(adapter)
+    context = _context()
+    context = context.model_copy(update={"provider": "acme_erp"})
+
+    assert factory.resolve_financial(context) is adapter

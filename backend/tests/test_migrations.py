@@ -55,7 +55,14 @@ def test_migrations_apply_on_empty_database():
                         text("SELECT tablename FROM pg_tables WHERE schemaname='public'")
                     ).scalars()
                 )
-                assert {"users", "subscriptions"} <= tables
+                assert {
+                    "users",
+                    "subscriptions",
+                    "company_data_sources",
+                    "import_profiles",
+                    "import_batches",
+                    "parties",
+                } <= tables
                 version = connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar()

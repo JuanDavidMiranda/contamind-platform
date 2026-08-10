@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
 
-from app.providers.canonical import ProviderContext, ProviderKind
+from app.providers.canonical import ProviderContext, ProviderId
 
 
 @dataclass(frozen=True, repr=False)
@@ -43,10 +43,10 @@ class InMemorySecretStore(SecretStore):
     """Store efímero para pruebas. No es apto para producción ni reinicios."""
 
     def __init__(self) -> None:
-        self._secrets: dict[tuple[str, str, ProviderKind], ProviderSecret] = {}
+        self._secrets: dict[tuple[str, str, ProviderId], ProviderSecret] = {}
 
     @staticmethod
-    def _key(context: ProviderContext) -> tuple[str, str, ProviderKind]:
+    def _key(context: ProviderContext) -> tuple[str, str, ProviderId]:
         return (str(context.tenant_id), str(context.company_id), context.provider)
 
     def get(self, context: ProviderContext) -> ProviderSecret | None:

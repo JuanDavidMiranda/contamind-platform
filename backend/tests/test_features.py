@@ -21,7 +21,9 @@ def test_enabled_features_exposes_known_flags():
         "SIIGO_INTEGRATION_ENABLED",
         "LLM_ENABLED",
         "MOCK_EXTERNAL_SERVICES",
+        "NOVASOFT_INTEGRATION_ENABLED",
         "WORLDOFFICE_INTEGRATION_ENABLED",
+        "SYSCAFE_INTEGRATION_ENABLED",
     }
 
 

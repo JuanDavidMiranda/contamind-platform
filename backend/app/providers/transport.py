@@ -66,7 +66,7 @@ class ProviderHttpClient:
                     continue
                 raise app_error(
                     "PROVIDER_UNREACHABLE",
-                    details={"provider": context.provider.value},
+                    details={"provider": context.provider},
                 ) from exc
 
             if response.status_code == 429 or response.status_code >= 500:
@@ -85,7 +85,7 @@ class ProviderHttpClient:
 
     @staticmethod
     def _raise_for_status(context: ProviderContext, status_code: int) -> None:
-        details = {"provider": context.provider.value}
+        details = {"provider": context.provider}
         if status_code in (401, 403):
             raise app_error("PROVIDER_AUTH_FAILED", details=details)
         if status_code == 429:
@@ -101,7 +101,7 @@ class ProviderHttpClient:
                 "request_id": context.correlation_id,
                 "method": method,
                 "status_code": status_code,
-                "provider": context.provider.value,
+                "provider": context.provider,
                 "company_id": str(context.company_id),
             },
         )

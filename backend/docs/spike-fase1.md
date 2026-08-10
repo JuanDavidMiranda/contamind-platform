@@ -215,3 +215,11 @@ Con la aprobación de estos hallazgos se autoriza la Fase 2: **infraestructura d
 
 - ADR-0001 a ADR-0007 (`backend/docs/adr/`)
 - `backend/docs/cierre-fase0.md` (precedentes de calidad, error catalog y patrones reutilizables)
+
+## 16. Actualización multi-proveedor (2026-08-10)
+
+La plataforma no selecciona un proveedor prioritario. Siigo, Alegra, World Office, Novasoft y SysCafé se tratan como opciones configurables según la modalidad técnica disponible. Novasoft queda pendiente de confirmar contrato/API o mecanismo autorizado; SysCafé tiene evidencia pública de intercambio de catálogos por archivos y sincronización entre puntos. Ver ADR-0008 para la matriz por modalidad, los límites de evidencia y la regla de no acoplamiento.
+
+## 17. Actualización de fuentes de datos (2026-08-10)
+
+La conectividad se organiza por fuente de datos de cada empresa y no solo por proveedor. Una empresa sin software contable puede importar archivos o usar captura manual; una instalación local requiere agente o conector autorizado. La primera ruta universal es CSV con perfil de mapeo; XLSX y conectores de base de datos quedan detrás de sus validaciones y permisos correspondientes. Ver ADR-0009.

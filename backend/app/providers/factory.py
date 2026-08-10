@@ -2,30 +2,33 @@
 
 from collections.abc import Callable
 
-from app.config.features import is_provider_enabled
-from app.providers.canonical import ProviderContext, ProviderKind
+from app.providers.canonical import ProviderContext, ProviderId, normalize_provider_id
 from app.providers.ports import FinancialProviderPort, FiscalProviderPort, ProviderPort
 from app.shared.errors import app_error
 
-FeatureChecker = Callable[[ProviderKind], bool]
+FeatureChecker = Callable[[ProviderId], bool]
 
 
 def _major_version(version: str) -> str:
     return version.split(".", maxsplit=1)[0]
 
 
+def _always_enabled(provider: ProviderId) -> bool:
+    return True
+
+
 class ProviderFactory:
     """Resuelve adaptadores registrados sin exponer sus tipos al dominio."""
 
-    def __init__(self, feature_checker: FeatureChecker = is_provider_enabled) -> None:
+    def __init__(self, feature_checker: FeatureChecker = _always_enabled) -> None:
         self._feature_checker = feature_checker
-        self._providers: dict[ProviderKind, ProviderPort] = {}
+        self._providers: dict[ProviderId, ProviderPort] = {}
 
     def register(self, provider: ProviderPort) -> None:
-        self._providers[provider.provider] = provider
+        self._providers[normalize_provider_id(provider.provider)] = provider
 
-    def unregister(self, provider: ProviderKind) -> None:
-        self._providers.pop(provider, None)
+    def unregister(self, provider: ProviderId) -> None:
+        self._providers.pop(normalize_provider_id(provider), None)
 
     def resolve_financial(self, context: ProviderContext) -> FinancialProviderPort:
         provider = self._resolve(context)
@@ -33,7 +36,7 @@ class ProviderFactory:
             raise app_error(
                 "CONFLICT",
                 message="El proveedor registrado no es de tipo financiero.",
-                details={"provider": context.provider.value},
+                details={"provider": context.provider},
             )
         return provider
 
@@ -43,18 +46,18 @@ class ProviderFactory:
             raise app_error(
                 "CONFLICT",
                 message="El proveedor registrado no es de tipo fiscal.",
-                details={"provider": context.provider.value},
+                details={"provider": context.provider},
             )
         return provider
 
-    def registered(self) -> list[ProviderKind]:
+    def registered(self) -> list[ProviderId]:
         return list(self._providers)
 
     def _resolve(self, context: ProviderContext) -> ProviderPort:
         if not self._feature_checker(context.provider):
             raise app_error(
                 "DEPENDENCY_DISABLED",
-                details={"provider": context.provider.value},
+                details={"provider": context.provider},
             )
 
         provider = self._providers.get(context.provider)
@@ -62,7 +65,7 @@ class ProviderFactory:
             raise app_error(
                 "NOT_FOUND",
                 message="Proveedor no registrado.",
-                details={"provider": context.provider.value},
+                details={"provider": context.provider},
             )
 
         if _major_version(provider.canonical_version) != _major_version(context.canonical_version):
@@ -70,7 +73,7 @@ class ProviderFactory:
                 "CONFLICT",
                 message="El proveedor no es compatible con la versión canónica solicitada.",
                 details={
-                    "provider": context.provider.value,
+                    "provider": context.provider,
                     "adapter_version": provider.canonical_version,
                     "requested_version": context.canonical_version,
                 },

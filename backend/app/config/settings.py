@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     FEATURE_FLAGS: dict[str, bool] = {}
     SESSION_MAX_ACTIVE: int = 1000
     SESSION_TTL_SECONDS: int = 3600
+    MAX_IMPORT_FILE_BYTES: int = 5_000_000
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -12,7 +12,9 @@ from app.providers.canonical import (
     Party,
     PartyType,
     ProviderContext,
+    ProviderId,
     ProviderKind,
+    normalize_provider_id,
 )
 from app.providers.ports import FinancialProviderPort
 from app.providers.secrets import SecretStore
@@ -22,7 +24,7 @@ from app.shared.errors import app_error
 @dataclass(frozen=True)
 class ProviderAuditEvent:
     company_id: str
-    provider: ProviderKind
+    provider: ProviderId
     operation: str
     correlation_id: str | None
 
@@ -34,12 +36,13 @@ class MockFinancialProvider(FinancialProviderPort):
 
     def __init__(
         self,
-        provider: ProviderKind = ProviderKind.SIIGO,
+        provider: ProviderId = ProviderKind.SIIGO,
         secret_store: SecretStore | None = None,
     ) -> None:
-        if provider is ProviderKind.DIAN:
+        provider_id = normalize_provider_id(provider)
+        if provider_id == ProviderKind.DIAN.value:
             raise ValueError("DIAN debe usar el port fiscal, no el financiero.")
-        self.provider = provider
+        self.provider = provider_id
         self._secret_store = secret_store
         self._parties: dict[str, dict[str, Party]] = {}
         self._invoices_by_key: dict[tuple[str, str], Invoice] = {}
@@ -53,7 +56,7 @@ class MockFinancialProvider(FinancialProviderPort):
         if self._secret_store is None or self._secret_store.get(context) is None:
             raise app_error(
                 "PROVIDER_AUTH_FAILED",
-                details={"provider": context.provider.value},
+                details={"provider": context.provider},
             )
         self._audit(context, "authenticate")
         return "mock-authenticated-transport"
@@ -94,7 +97,7 @@ class MockFinancialProvider(FinancialProviderPort):
             raise app_error(
                 "NOT_FOUND",
                 message="Tercero no encontrado en el proveedor.",
-                details={"provider": context.provider.value},
+                details={"provider": context.provider},
             )
         self._audit(context, "get_party")
         return party
@@ -156,5 +159,5 @@ class MockFinancialProvider(FinancialProviderPort):
             raise app_error(
                 "CONFLICT",
                 message="La entidad no pertenece a la empresa del contexto.",
-                details={"provider": context.provider.value},
+                details={"provider": context.provider},
             )

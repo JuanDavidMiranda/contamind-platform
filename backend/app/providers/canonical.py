@@ -3,10 +3,11 @@
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Generic, TypeVar
+import re
+from typing import Annotated, Generic, TypeVar
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 CANONICAL_VERSION = "1.0.0"
 
@@ -20,6 +21,37 @@ class ProviderKind(str, Enum):
     ALEGRA = "alegra"
     WORLD_OFFICE_CLOUD = "worldoffice_cloud"
     DIAN = "dian"
+    NOVASOFT = "novasoft"
+    SYSCAFE = "syscafe"
+
+
+_PROVIDER_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+ProviderId = Annotated[str, Field(pattern=_PROVIDER_ID_PATTERN.pattern)]
+
+
+def normalize_provider_id(provider: str | ProviderKind) -> str:
+    value = provider.value if isinstance(provider, ProviderKind) else str(provider)
+    normalized = value.strip().lower()
+    if not _PROVIDER_ID_PATTERN.fullmatch(normalized):
+        raise ValueError("El identificador del proveedor debe usar minúsculas, números y guiones bajos.")
+    return normalized
+
+
+class IntegrationMode(str, Enum):
+    CLOUD_API = "cloud_api"
+    FILE_EXCHANGE = "file_exchange"
+    LOCAL_AGENT = "local_agent"
+    DATABASE_CONNECTOR = "database_connector"
+    VENDOR_MANAGED = "vendor_managed"
+
+
+class ProviderCapability(str, Enum):
+    PARTIES = "parties"
+    INVOICES = "invoices"
+    PAYMENTS = "payments"
+    JOURNALS = "journals"
+    PAYROLL = "payroll"
+    FILE_IMPORT_EXPORT = "file_import_export"
 
 
 class PartyType(str, Enum):
@@ -53,6 +85,20 @@ class Company(CanonicalModel):
     name: str = Field(min_length=1, max_length=255)
     functional_currency: str = Field(default="COP", pattern=r"^[A-Z]{3}$")
     provider_company_id: str | None = Field(default=None, max_length=255)
+
+
+class ProviderDescriptor(CanonicalModel):
+    """Metadatos declarativos de un proveedor, sin acoplar el dominio a su marca."""
+
+    provider_id: ProviderId
+    display_name: str = Field(min_length=1, max_length=255)
+    mode: IntegrationMode
+    capabilities: frozenset[ProviderCapability] = frozenset()
+
+    @field_validator("provider_id", mode="before")
+    @classmethod
+    def normalize_id(cls, value: str | ProviderKind) -> str:
+        return normalize_provider_id(value)
 
 
 class Party(CanonicalModel):
@@ -159,9 +205,14 @@ class JournalEntry(CanonicalModel):
 class ProviderContext(CanonicalModel):
     tenant_id: UUID
     company_id: UUID
-    provider: ProviderKind
+    provider: ProviderId
     canonical_version: str = CANONICAL_VERSION
     correlation_id: str | None = Field(default=None, max_length=64)
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def normalize_id(cls, value: str | ProviderKind) -> str:
+        return normalize_provider_id(value)
 
 
 class PageRequest(CanonicalModel):

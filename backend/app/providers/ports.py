@@ -10,12 +10,12 @@ from app.providers.canonical import (
     PageRequest,
     Party,
     ProviderContext,
-    ProviderKind,
+    ProviderId,
 )
 
 
 class ProviderPort(ABC):
-    provider: ProviderKind
+    provider: ProviderId
     canonical_version: str = CANONICAL_VERSION
 
 
