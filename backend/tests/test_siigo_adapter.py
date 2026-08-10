@@ -97,3 +97,131 @@ async def test_siigo_adapter_rejects_incomplete_credentials_without_transporting
 
     assert error.value.code == "VALIDATION_ERROR"
     assert "username" not in str(error.value.details)
+
+
+@pytest.mark.asyncio
+async def test_siigo_adapter_rejects_invalid_partner_id_before_making_a_request():
+    calls = 0
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(500)
+
+    adapter = SiigoProviderAdapter(
+        api_base_url="https://siigo.test",
+        client_factory=_client_factory(httpx.MockTransport(handler)),
+    )
+    secret = ProviderSecret(
+        {
+            "username": "integracion@cliente.test",
+            "access_key": "private-access-key",
+            "partner_id": "partner id con espacios",
+        }
+    )
+
+    with pytest.raises(AppError) as error:
+        await adapter.test_connection(_context(), secret)
+
+    assert calls == 0
+    assert error.value.code == "VALIDATION_ERROR"
+    assert error.value.details == {"field": "partner_id"}
+
+
+@pytest.mark.asyncio
+async def test_siigo_adapter_normalizes_authentication_failures_without_leaking_secrets():
+    def handler(request):
+        assert b"private-access-key" in request.content
+        return httpx.Response(401, json={"message": "invalid access key"})
+
+    adapter = SiigoProviderAdapter(
+        api_base_url="https://siigo.test",
+        client_factory=_client_factory(httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(AppError) as error:
+        await adapter.test_connection(_context(), _secret())
+
+    assert error.value.code == "PROVIDER_AUTH_FAILED"
+    assert error.value.details == {"provider": ProviderKind.SIIGO}
+    assert "private-access-key" not in str(error.value)
+    assert "private-access-key" not in str(error.value.details)
+
+
+@pytest.mark.asyncio
+async def test_siigo_adapter_rejects_an_auth_response_without_access_token():
+    def handler(request):
+        return httpx.Response(201, json={"expires_in": 86400})
+
+    adapter = SiigoProviderAdapter(
+        api_base_url="https://siigo.test",
+        client_factory=_client_factory(httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(AppError) as error:
+        await adapter.test_connection(_context(), _secret())
+
+    assert error.value.code == "PROVIDER_AUTH_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_siigo_adapter_normalizes_rate_limit_after_retries():
+    customer_calls = 0
+
+    def handler(request):
+        nonlocal customer_calls
+        if request.url.path == "/auth":
+            return httpx.Response(201, json={"access_token": "short-lived-token"})
+        customer_calls += 1
+        return httpx.Response(429, json={"message": "rate limit"})
+
+    adapter = SiigoProviderAdapter(
+        api_base_url="https://siigo.test",
+        client_factory=_client_factory(httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(AppError) as error:
+        await adapter.fetch_parties(_context(), _secret(), cursor=None, page_size=10)
+
+    assert customer_calls == 3
+    assert error.value.code == "PROVIDER_RATE_LIMITED"
+
+
+@pytest.mark.asyncio
+async def test_siigo_adapter_normalizes_an_invalid_customer_payload():
+    def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(201, json={"access_token": "short-lived-token"})
+        return httpx.Response(200, json={"results": [{"id": "party-without-name"}]})
+
+    adapter = SiigoProviderAdapter(
+        api_base_url="https://siigo.test",
+        client_factory=_client_factory(httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(AppError) as error:
+        await adapter.fetch_parties(_context(), _secret(), cursor=None, page_size=10)
+
+    assert error.value.code == "PROVIDER_ERROR"
+    assert error.value.details == {"provider": ProviderKind.SIIGO}
+
+
+@pytest.mark.asyncio
+async def test_siigo_adapter_rejects_an_invalid_saved_cursor_before_authentication():
+    calls = 0
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(500)
+
+    adapter = SiigoProviderAdapter(
+        api_base_url="https://siigo.test",
+        client_factory=_client_factory(httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(AppError) as error:
+        await adapter.fetch_parties(_context(), _secret(), cursor="invalid", page_size=10)
+
+    assert calls == 0
+    assert error.value.code == "CONFLICT"

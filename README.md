@@ -54,9 +54,29 @@ docker compose up -d          # desde la raíz del repo
 La suite usa markers: `unit`, `integration` y `postgres` (opt-in, requiere contenedor en `127.0.0.1:5433`).
 
 ```powershell
-.\scripts\test.ps1            # por defecto: unit + integration (60 passed, 1 skipped)
-.\scripts\test-postgres.ps1   # incluye test_migrations (61 passed)
+.\scripts\test.ps1            # por defecto: unit + integration (115 passed, 1 skipped)
+.\scripts\test-postgres.ps1   # añade la validación real de migraciones PostgreSQL
 ```
+
+### Siigo sin credenciales reales
+
+El contrato inicial de Siigo se valida sin red ni secretos mediante
+`httpx.MockTransport`. Estas pruebas cubren autenticación, paginación y mapeo de
+terceros, además de credenciales incompletas, Partner-Id inválido, respuestas de
+autenticación incorrectas, rate limiting y payloads incompatibles.
+
+La prueba de integración `test_siigo_connection_e2e.py` recorre onboarding,
+creación de fuente, cifrado de credenciales ficticias, prueba de conexión,
+sincronización paginada, persistencia, auditoría y aislamiento multiempresa.
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pytest tests\test_siigo_adapter.py -q
+```
+
+`SIIGO_INTEGRATION_ENABLED` debe permanecer en `false` hasta disponer de
+credenciales autorizadas. `MOCK_EXTERNAL_SERVICES` habilita herramientas mock de
+la aplicación, pero no sustituye silenciosamente el adaptador real de Siigo.
 
 ## Configuración por ambiente
 
