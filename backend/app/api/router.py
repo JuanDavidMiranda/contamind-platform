@@ -7,6 +7,7 @@ from app.api.v1.company_memberships import router as company_memberships_router
 from app.api.v1.companies import router as companies_router, tenant_router
 from app.api.v1.data_sources import router as data_sources_router
 from app.api.v1.health import router as health_router
+from app.api.v1.manual_accounting import router as manual_accounting_router
 
 api_router = APIRouter()
 
@@ -19,3 +20,4 @@ api_router.include_router(tenant_router)
 api_router.include_router(company_memberships_router)
 api_router.include_router(data_sources_router)
 api_router.include_router(data_sources_router, prefix="/admin", include_in_schema=False)
+api_router.include_router(manual_accounting_router)

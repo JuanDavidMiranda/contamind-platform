@@ -108,3 +108,7 @@ El acceso a datos se controla mediante membresías por empresa: `owner`, `admin`
 ### Ciclo de vida multiempresa
 
 El propietario de un tenant puede crear razones sociales adicionales con `POST /api/v1/tenants/{tenant_id}/companies`. Las empresas se editan, desactivan o reactivan sin borrarlas; una empresa desactivada no acepta nuevas configuraciones, importaciones ni capturas. `GET /api/v1/companies/{company_id}/audit` expone la trazabilidad de fuentes, importaciones y capturas manuales para los miembros autorizados. Ver `backend/docs/adr/0012-ciclo-de-vida-multiempresa-por-tenant.md`.
+
+### Captura manual contable
+
+Las fuentes manuales activas pueden registrar impuestos, ítems, facturas, pagos y comprobantes contables. Cada operación exige `Idempotency-Key`, conserva empresa, fuente y autor, y valida referencias internas; los comprobantes además deben cuadrar por partida doble. Ver `backend/docs/adr/0013-captura-manual-del-nucleo-contable.md`.

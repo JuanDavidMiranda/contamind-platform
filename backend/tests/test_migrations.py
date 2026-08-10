@@ -66,6 +66,13 @@ def test_migrations_apply_on_empty_database():
                     "import_profiles",
                     "import_batches",
                     "parties",
+                    "taxes",
+                    "items",
+                    "invoices",
+                    "invoice_lines",
+                    "payments",
+                    "journal_entries",
+                    "journal_entry_lines",
                 } <= tables
                 version = connection.execute(
                     text("SELECT version_num FROM alembic_version")

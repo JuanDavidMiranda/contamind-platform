@@ -37,6 +37,8 @@ class DataSourceStatus(str, Enum):
 
 class DataCapability(str, Enum):
     PARTIES = "parties"
+    TAXES = "taxes"
+    ITEMS = "items"
     INVOICES = "invoices"
     PAYMENTS = "payments"
     JOURNALS = "journals"
