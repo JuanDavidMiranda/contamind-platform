@@ -10,6 +10,7 @@ from app.data_sources.csv_import import CsvPartyImportSource
 from app.data_sources.models import (
     CompanyDataSource,
     DataSourceContext,
+    DataSourceKind,
     FileFormat,
     ImportEntity,
     ImportProfile,
@@ -22,7 +23,7 @@ from app.models.data_source import (
     ImportProfileRecord,
     PartyRecord,
 )
-from app.providers.canonical import Party
+from app.providers.canonical import Party, PartyType
 from app.shared.errors import app_error
 
 
@@ -59,6 +60,11 @@ class DataSourceService:
             .order_by(CompanyDataSourceRecord.created_at)
         )
         return [self._source_from_record(record) for record in records]
+
+    def get_source(self, source_id: UUID) -> CompanyDataSource:
+        """Expone la fuente solo para que la capa API determine su ámbito."""
+
+        return self._get_source(source_id)
 
     def create_profile(self, profile: ImportProfile) -> ImportProfile:
         self._get_source(profile.data_source_id)
@@ -129,6 +135,44 @@ class DataSourceService:
         )
         self._db.commit()
         return batch_id, result.model_copy(update={"parties": persisted_parties})
+
+    def capture_manual_party(
+        self,
+        data_source_id: UUID,
+        *,
+        party_type: PartyType,
+        name: str,
+        document_type: str | None = None,
+        document_number: str | None = None,
+        email: str | None = None,
+        phone: str | None = None,
+        city: str | None = None,
+        address: str | None = None,
+        fiscal_responsibility: str | None = None,
+    ) -> Party:
+        """Registra o actualiza un tercero desde una fuente manual de la empresa."""
+
+        source = self._get_source(data_source_id)
+        if source.kind is not DataSourceKind.MANUAL_ENTRY:
+            raise app_error(
+                "CONFLICT",
+                message="La fuente no está configurada para captura manual.",
+            )
+        party = Party(
+            company_id=source.company_id,
+            party_type=party_type,
+            name=name,
+            document_type=document_type,
+            document_number=document_number,
+            email=email,
+            phone=phone,
+            city=city,
+            address=address,
+            fiscal_responsibility=fiscal_responsibility,
+        )
+        persisted_party = self._upsert_party(source.id, party)
+        self._db.commit()
+        return persisted_party
 
     def _get_source(self, source_id: UUID) -> CompanyDataSource:
         record = self._db.get(CompanyDataSourceRecord, str(source_id))

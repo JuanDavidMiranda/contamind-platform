@@ -93,4 +93,10 @@ ContaMind no prioriza ni acopla el dominio a una marca. Los proveedores se regis
 
 ### Fuentes de datos por empresa
 
-Cada empresa configura una o varias fuentes de datos: software contable conectado, exportaciones CSV/XLSX, agente o conector local de base de datos, captura manual y servicios fiscales como DIAN. Todas alimentan el mismo modelo canónico. Las rutas universales implementadas importan terceros desde CSV y XLSX con perfiles de mapeo, rechazos por fila, auditoría y persistencia; bases de datos, captura manual y conectores locales requieren sus interfaces/agentes autorizados antes de habilitarse. Ver `backend/docs/adr/0009-fuentes-de-datos-por-empresa.md`.
+La captura manual de terceros ya está disponible para fuentes `manual_entry`. Se mantiene el mismo modelo canónico y la misma persistencia que usa una importación de archivo.
+
+Cada empresa configura una o varias fuentes de datos: software contable conectado, exportaciones CSV/XLSX, agente o conector local de base de datos, captura manual y servicios fiscales como DIAN. Todas alimentan el mismo modelo canónico. Las rutas universales implementadas importan terceros desde CSV y XLSX con perfiles de mapeo, rechazos por fila, auditoría y persistencia; bases de datos y conectores locales requieren sus interfaces/agentes autorizados antes de habilitarse. Ver `backend/docs/adr/0009-fuentes-de-datos-por-empresa.md`.
+
+### Acceso por empresa
+
+El acceso a datos se controla mediante membresías por empresa: `owner`, `admin`, `operator` y `viewer`. Un operador puede importar y capturar información únicamente dentro de las fuentes de las empresas donde es miembro; no puede configurarlas. Los administradores de plataforma se reservan para soporte y para asignar el primer propietario. Ver `backend/docs/adr/0010-rbac-y-membresias-por-empresa.md`.

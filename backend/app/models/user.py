@@ -1,6 +1,7 @@
 from datetime import datetime
+from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -15,6 +16,38 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class CompanyRole(str, Enum):
+    """Roles que delimitan el acceso de un usuario a una empresa concreta."""
+
+    OWNER = "owner"
+    ADMIN = "admin"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
+
+
+class CompanyMembership(Base):
+    """Relación explícita entre un usuario y una empresa canónica.
+
+    La empresa aún no tiene una tabla propia porque puede provenir de distintas
+    fuentes contables. Por eso `company_id` conserva el UUID canónico que usan
+    las fuentes de datos y los terceros.
+    """
+
+    __tablename__ = "company_memberships"
+    __table_args__ = (
+        UniqueConstraint("user_id", "company_id", name="uq_company_memberships_user_company"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    company_id: Mapped[str] = mapped_column(String(36), index=True)
+    role: Mapped[str] = mapped_column(String(20), default=CompanyRole.OPERATOR.value)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Subscription(Base):

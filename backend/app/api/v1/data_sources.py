@@ -1,4 +1,4 @@
-"""API administrativa inicial para fuentes de datos e importaciones de terceros."""
+"""Fuentes de datos operadas dentro del ámbito de cada empresa."""
 
 from pathlib import Path
 from uuid import UUID
@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.v1.admin import require_admin
 from app.config.settings import settings
 from app.data_sources.models import (
     CompanyDataSource,
@@ -21,11 +20,19 @@ from app.data_sources.models import (
     ImportRejection,
 )
 from app.database.database import get_db
+from app.models.user import User
 from app.providers.canonical import Party, PartyType
 from app.services.data_source_service import DataSourceService
+from app.shared.company_access import (
+    MANAGE_SOURCES_ROLES,
+    OPERATE_SOURCES_ROLES,
+    VIEW_COMPANY_ROLES,
+    require_company_role,
+)
 from app.shared.errors import app_error
+from app.shared.security import get_current_user
 
-router = APIRouter(prefix="/admin/data-sources", tags=["Data sources"])
+router = APIRouter(prefix="/data-sources", tags=["Data sources"])
 
 
 class DataSourceCreate(BaseModel):
@@ -35,7 +42,7 @@ class DataSourceCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
     kind: DataSourceKind
     mode: ConnectionMode
-    capabilities: set[DataCapability] = set()
+    capabilities: set[DataCapability] = Field(default_factory=set)
     provider_id: str | None = Field(default=None, max_length=64)
     credential_reference: str | None = Field(default=None, max_length=255)
     status: DataSourceStatus = DataSourceStatus.ACTIVE
@@ -54,8 +61,31 @@ class PartyImportResponse(BaseModel):
     rejections: tuple[ImportRejection, ...]
 
 
-def _require_admin(authorization: str | None, db: Session) -> None:
-    require_admin(authorization, db)
+class ManualPartyCreate(BaseModel):
+    party_type: PartyType
+    name: str = Field(min_length=1, max_length=255)
+    document_type: str | None = Field(default=None, max_length=10)
+    document_number: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    city: str | None = Field(default=None, max_length=100)
+    address: str | None = Field(default=None, max_length=255)
+    fiscal_responsibility: str | None = Field(default=None, max_length=100)
+
+
+def _current_user(authorization: str | None, db: Session) -> User:
+    return get_current_user(authorization, db)
+
+
+def _source_for_role(
+    data_source_id: UUID,
+    user: User,
+    db: Session,
+    allowed_roles,
+) -> CompanyDataSource:
+    source = DataSourceService(db).get_source(data_source_id)
+    require_company_role(user, db, source.company_id, allowed_roles)
+    return source
 
 
 @router.post("", response_model=CompanyDataSource, status_code=201)
@@ -64,7 +94,8 @@ def create_data_source(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_admin(authorization, db)
+    user = _current_user(authorization, db)
+    require_company_role(user, db, payload.company_id, MANAGE_SOURCES_ROLES)
     return DataSourceService(db).create_source(CompanyDataSource(**payload.model_dump()))
 
 
@@ -74,7 +105,8 @@ def list_data_sources(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_admin(authorization, db)
+    user = _current_user(authorization, db)
+    require_company_role(user, db, company_id, VIEW_COMPANY_ROLES)
     return DataSourceService(db).list_sources(company_id)
 
 
@@ -85,7 +117,8 @@ def create_import_profile(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_admin(authorization, db)
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
     profile = ImportProfile(data_source_id=data_source_id, **payload.model_dump())
     return DataSourceService(db).create_profile(profile)
 
@@ -98,7 +131,8 @@ async def import_parties(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_admin(authorization, db)
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
     content = await file.read(settings.MAX_IMPORT_FILE_BYTES + 1)
     if len(content) > settings.MAX_IMPORT_FILE_BYTES:
         raise app_error("VALIDATION_ERROR", message="El archivo supera el tamaño máximo permitido.")
@@ -118,3 +152,17 @@ async def import_parties(
         parties=result.parties,
         rejections=result.rejections,
     )
+
+
+@router.post("/{data_source_id}/parties", response_model=Party, status_code=201)
+def capture_manual_party(
+    data_source_id: UUID,
+    payload: ManualPartyCreate,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Captura terceros sin permitir que el cliente elija la empresa de destino."""
+
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
+    return DataSourceService(db).capture_manual_party(data_source_id, **payload.model_dump())
