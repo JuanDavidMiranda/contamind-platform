@@ -53,6 +53,11 @@ class FileFormat(str, Enum):
 
 class ImportEntity(str, Enum):
     PARTIES = "parties"
+    TAXES = "taxes"
+    ITEMS = "items"
+    INVOICES = "invoices"
+    PAYMENTS = "payments"
+    JOURNAL_ENTRIES = "journal_entries"
 
 
 _CONNECTOR_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
@@ -130,6 +135,12 @@ class ImportRejection(CanonicalModel):
 
 class PartyImportResult(CanonicalModel):
     parties: tuple[Party, ...]
+    rejections: tuple[ImportRejection, ...]
+
+
+class AccountingImportResult(CanonicalModel):
+    entity: ImportEntity
+    accepted_rows: int = Field(ge=0)
     rejections: tuple[ImportRejection, ...]
 
 

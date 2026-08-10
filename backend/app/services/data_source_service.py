@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.data_sources.csv_import import CsvPartyImportSource
 from app.data_sources.models import (
+    AccountingImportResult,
     CompanyDataSource,
     DataSourceContext,
     DataSourceKind,
@@ -141,6 +142,48 @@ class DataSourceService:
         )
         self._db.commit()
         return batch_id, result.model_copy(update={"parties": persisted_parties})
+
+    def import_accounting(
+        self,
+        data_source_id: UUID,
+        profile_id: UUID,
+        content: bytes,
+        *,
+        uploaded_format: FileFormat,
+        actor_user_id: int,
+    ) -> tuple[UUID, AccountingImportResult]:
+        source = self._get_source(data_source_id)
+        profile = self._get_profile(profile_id)
+        if uploaded_format is not profile.file_format:
+            raise app_error(
+                "CONFLICT", message="La extensión del archivo no coincide con el perfil de importación."
+            )
+        from app.services.accounting_file_import_service import AccountingFileImportService
+
+        result = AccountingFileImportService(self._db).import_content(
+            source,
+            profile,
+            content,
+            uploaded_format=uploaded_format,
+            actor_user_id=actor_user_id,
+        )
+        batch_id = uuid4()
+        self._db.add(
+            ImportBatchRecord(
+                id=str(batch_id),
+                data_source_id=str(source.id),
+                company_id=str(source.company_id),
+                entity=profile.entity.value,
+                file_format=profile.file_format.value,
+                content_sha256=hashlib.sha256(content).hexdigest(),
+                accepted_rows=result.accepted_rows,
+                rejected_rows=len(result.rejections),
+                correlation_id=None,
+                created_by_user_id=actor_user_id,
+            )
+        )
+        self._db.commit()
+        return batch_id, result
 
     def capture_manual_party(
         self,

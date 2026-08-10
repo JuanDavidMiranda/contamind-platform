@@ -62,6 +62,13 @@ class PartyImportResponse(BaseModel):
     rejections: tuple[ImportRejection, ...]
 
 
+class AccountingImportResponse(BaseModel):
+    batch_id: UUID
+    entity: ImportEntity
+    accepted_rows: int
+    rejections: tuple[ImportRejection, ...]
+
+
 class ManualPartyCreate(BaseModel):
     party_type: PartyType
     name: str = Field(min_length=1, max_length=255)
@@ -162,6 +169,40 @@ async def import_parties(
     return PartyImportResponse(
         batch_id=batch_id,
         parties=result.parties,
+        rejections=result.rejections,
+    )
+
+
+@router.post("/{data_source_id}/imports/accounting", response_model=AccountingImportResponse)
+async def import_accounting(
+    data_source_id: UUID,
+    profile_id: UUID = Form(...),
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
+    content = await file.read(settings.MAX_IMPORT_FILE_BYTES + 1)
+    if len(content) > settings.MAX_IMPORT_FILE_BYTES:
+        raise app_error("VALIDATION_ERROR", message="El archivo supera el tamaño máximo permitido.")
+    if not content:
+        raise app_error("VALIDATION_ERROR", message="El archivo está vacío.")
+    extension = Path(file.filename or "").suffix.lower()
+    formats_by_extension = {".csv": FileFormat.CSV, ".xlsx": FileFormat.XLSX}
+    if extension not in formats_by_extension:
+        raise app_error("VALIDATION_ERROR", message="Solo se admiten archivos CSV o XLSX.")
+    batch_id, result = DataSourceService(db).import_accounting(
+        data_source_id,
+        profile_id,
+        content,
+        uploaded_format=formats_by_extension[extension],
+        actor_user_id=user.id,
+    )
+    return AccountingImportResponse(
+        batch_id=batch_id,
+        entity=result.entity,
+        accepted_rows=result.accepted_rows,
         rejections=result.rejections,
     )
 

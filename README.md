@@ -112,3 +112,7 @@ El propietario de un tenant puede crear razones sociales adicionales con `POST /
 ### Captura manual contable
 
 Las fuentes manuales activas pueden registrar impuestos, ítems, facturas, pagos y comprobantes contables. Cada operación exige `Idempotency-Key`, conserva empresa, fuente y autor, y valida referencias internas; los comprobantes además deben cuadrar por partida doble. Ver `backend/docs/adr/0013-captura-manual-del-nucleo-contable.md`.
+
+### Importación contable CSV/XLSX
+
+Las fuentes de archivos pueden importar impuestos, ítems, facturas, pagos y comprobantes con perfiles de mapeo por entidad. Las facturas y comprobantes agrupan sus líneas, resuelven referencias por código o documento y registran rechazos por fila sin descartar el lote completo. Ver `backend/docs/adr/0014-importacion-tabular-del-nucleo-contable.md`.

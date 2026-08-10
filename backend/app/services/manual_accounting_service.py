@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.data_sources.models import DataCapability, DataSourceKind, DataSourceStatus
+from app.data_sources.models import ConnectionMode, DataCapability, DataSourceKind, DataSourceStatus
 from app.models.accounting import (
     InvoiceLineRecord,
     InvoiceRecord,
@@ -323,8 +323,13 @@ class ManualAccountingService:
 
     def _manual_source(self, data_source_id: UUID, capability: DataCapability):
         source = DataSourceService(self._db).get_source(data_source_id)
-        if source.kind is not DataSourceKind.MANUAL_ENTRY or source.status is not DataSourceStatus.ACTIVE:
-            raise app_error("CONFLICT", message="La fuente no está disponible para captura manual.")
+        allowed_source = (
+            source.kind is DataSourceKind.MANUAL_ENTRY and source.mode is ConnectionMode.MANUAL
+        ) or (
+            source.kind is DataSourceKind.FILE_IMPORT and source.mode is ConnectionMode.FILE_UPLOAD
+        )
+        if not allowed_source or source.status is not DataSourceStatus.ACTIVE:
+            raise app_error("CONFLICT", message="La fuente no está disponible para esta captura contable.")
         if capability not in source.capabilities:
             raise app_error(
                 "CONFLICT",
