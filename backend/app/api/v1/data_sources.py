@@ -21,6 +21,7 @@ from app.data_sources.models import (
     ImportProfile,
     ImportRejection,
     ProviderOperationResult,
+    ProviderSyncJobResult,
 )
 from app.database.database import get_db
 from app.models.user import User
@@ -306,8 +307,12 @@ async def test_provider_connection(
     )
 
 
-@router.post("/{data_source_id}/sync/parties", response_model=ProviderOperationResult)
-async def sync_provider_parties(
+@router.post(
+    "/{data_source_id}/sync/parties",
+    response_model=ProviderSyncJobResult,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def enqueue_provider_party_sync(
     data_source_id: UUID,
     page_size: int = Query(default=50, ge=1, le=100),
     authorization: str | None = Header(default=None),
@@ -316,12 +321,35 @@ async def sync_provider_parties(
 ):
     user = _current_user(authorization, db)
     _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
-    return await ProviderConnectionService(db).sync_parties(
+    return ProviderConnectionService(db).enqueue_party_sync(
         data_source_id,
         actor_user_id=user.id,
         page_size=page_size,
         correlation_id=(x_request_id or "")[:64] or None,
     )
+
+
+@router.get("/{data_source_id}/sync/jobs", response_model=list[ProviderSyncJobResult])
+def list_provider_sync_jobs(
+    data_source_id: UUID,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, VIEW_COMPANY_ROLES)
+    return ProviderConnectionService(db).list_sync_jobs(data_source_id)
+
+
+@router.get("/{data_source_id}/sync/jobs/{job_id}", response_model=ProviderSyncJobResult)
+def get_provider_sync_job(
+    data_source_id: UUID,
+    job_id: UUID,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    _source_for_role(data_source_id, user, db, VIEW_COMPANY_ROLES)
+    return ProviderConnectionService(db).get_sync_job(data_source_id, job_id)
 
 
 @router.get("/{data_source_id}/connection-runs", response_model=list[ProviderOperationResult])

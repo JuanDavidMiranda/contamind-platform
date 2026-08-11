@@ -88,6 +88,48 @@ class ProviderSyncRunRecord(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class ProviderSyncJobRecord(Base):
+    """Cola persistente de sincronizaci\u00f3n, aislada por fuente de datos.
+
+    ``active_data_source_id`` es nulo cuando el trabajo ya termin\u00f3. Su
+    restricci\u00f3n \u00fanica impide que se encole o ejecute m\u00e1s de una sincronizaci\u00f3n
+    activa para una misma fuente, tanto en SQLite como en PostgreSQL.
+    """
+
+    __tablename__ = "provider_sync_jobs"
+    __table_args__ = (
+        UniqueConstraint("active_data_source_id", name="uq_provider_sync_jobs_active_source"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    data_source_id: Mapped[str] = mapped_column(
+        ForeignKey("company_data_sources.id", ondelete="CASCADE"), index=True
+    )
+    active_data_source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    company_id: Mapped[str] = mapped_column(ForeignKey("companies.id"), index=True)
+    provider_id: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    page_size: Mapped[int] = mapped_column(Integer)
+    cursor: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    processed_records: Mapped[int] = mapped_column(Integer, default=0)
+    pages_processed: Mapped[int] = mapped_column(Integer, default=0)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer)
+    available_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ImportProfileRecord(Base):
     __tablename__ = "import_profiles"
 

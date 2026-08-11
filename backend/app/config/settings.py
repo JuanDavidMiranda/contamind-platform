@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import Literal
 
 from cryptography.fernet import Fernet
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     SESSION_MAX_ACTIVE: int = 1000
     SESSION_TTL_SECONDS: int = 3600
     MAX_IMPORT_FILE_BYTES: int = 5_000_000
+    PROVIDER_SYNC_MAX_ATTEMPTS: int = Field(default=3, ge=1, le=10)
+    PROVIDER_SYNC_RETRY_BASE_SECONDS: int = Field(default=30, ge=1, le=3600)
+    PROVIDER_SYNC_RETRY_MAX_SECONDS: int = Field(default=3600, ge=1, le=86_400)
+    PROVIDER_SYNC_LEASE_SECONDS: int = Field(default=600, ge=30, le=86_400)
+    PROVIDER_SYNC_WORKER_BATCH_SIZE: int = Field(default=10, ge=1, le=100)
+    PROVIDER_SYNC_WORKER_POLL_SECONDS: int = Field(default=5, ge=1, le=300)
 
     model_config = SettingsConfigDict(
         env_file=".env",

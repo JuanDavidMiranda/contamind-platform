@@ -24,6 +24,9 @@ docker compose up -d          # desde la raíz del repo
 
 # 4. Ejecutar el servidor
 .\scripts\run.ps1             # uvicorn main:app --reload
+
+# 5. En otra terminal, consumir sincronizaciones externas en segundo plano
+.\scripts\run-sync-worker.ps1  # cola persistente de proveedores
 ```
 
 > Pruebas rápidas aisladas con SQLite: definir `DATABASE_URL=sqlite:///./contamind.db` en `.env` (conveniente para tests sin contenedor).
@@ -84,7 +87,8 @@ la aplicación, pero no sustituye silenciosamente el adaptador real de Siigo.
 
 - `AUTH_SECRET_KEY`: obligatoria en `staging` y `production`; en `development` se autogenera si no se define.
 - `DATABASE_URL`: por defecto apunta a PostgreSQL del contenedor; se puede sobrescribir a SQLite.
-- `FEATURE_FLAGS` (JSON): `DIAN_INTEGRATION_ENABLED`, `SIIGO_INTEGRATION_ENABLED`, `LLM_ENABLED`, `MOCK_EXTERNAL_SERVICES`. Las integraciones externas NO están implementadas (Fases 3-4); los mocks están marcados explícitamente.
+- `FEATURE_FLAGS` (JSON): `DIAN_INTEGRATION_ENABLED`, `SIIGO_INTEGRATION_ENABLED`, `LLM_ENABLED`, `MOCK_EXTERNAL_SERVICES`. Siigo dispone de un adaptador inicial de lectura, siempre deshabilitado por defecto; el resto de integraciones requiere su propio adaptador y autorización.
+- Worker de proveedores: `PROVIDER_SYNC_MAX_ATTEMPTS`, `PROVIDER_SYNC_RETRY_BASE_SECONDS`, `PROVIDER_SYNC_RETRY_MAX_SECONDS`, `PROVIDER_SYNC_LEASE_SECONDS`, `PROVIDER_SYNC_WORKER_BATCH_SIZE` y `PROVIDER_SYNC_WORKER_POLL_SECONDS` controlan reintentos, recuperación y consumo de la cola.
 - Sesiones: `SESSION_MAX_ACTIVE` (límite de sesiones activas, evicción LRU) y `SESSION_TTL_SECONDS` (expiración por inactividad). La persistencia de sesión es temporal en memoria (`TEMPORARY_PERSISTENCE=True`): no sobrevive reinicios.
 
 ## Contrato de errores
@@ -105,7 +109,7 @@ Los logs de acceso y errores son JSON por línea e incluyen `request_id` (propag
 
 - Fase 0 (cerrada): arranque limpio, imports, workflow de chat/exógena, pruebas (61 verdes, incluye PostgreSQL), config segura, Alembic, PostgreSQL en contenedor, catálogo de errores estable, health checks live/ready, sesiones con TTL/LRU e interfaz reemplazable, logging estructurado, feature flags y tooling Ruff/markers. Ver `backend/docs/checkpoint1-fase0.md` y `backend/docs/cierre-fase0.md`.
 - Fase 1 (spike de viabilidad DIAN/Siigo/Alegra/World Office — documental, sin código productivo): arquitectura de proveedores neutral (ADR-0001), vertical DIAN con GetAcquirer como primer piloto (ADR-0002), evaluación de Siigo/Alegra/World Office (ADR-0003/0004/0005), modelo contable canónico (ADR-0006) y estrategia de autenticación transversal (ADR-0007). Ver `backend/docs/adr/` y `backend/docs/spike-fase1.md`.
-- Pendiente: ampliar adaptadores financieros y el vertical DIAN, ejecutar sincronizaciones en segundo plano para grandes volúmenes, multiagente y módulos de negocio. Las integraciones reales requieren credenciales y autorizaciones de los proveedores.
+- Pendiente: validar adaptadores con credenciales autorizadas, ampliar la cobertura financiera y el vertical DIAN, y desarrollar los módulos de negocio. Las integraciones reales requieren credenciales y autorizaciones de los proveedores.
 
 ### Arquitectura multi-proveedor
 
@@ -141,4 +145,4 @@ Las fuentes de archivos pueden importar impuestos, ítems, facturas, pagos y com
 
 Las fuentes con proveedor se crean en estado `pending`. Un administrador configura credenciales mediante `PUT /api/v1/data-sources/{id}/credentials` y ejecuta `POST /api/v1/data-sources/{id}/connection-test`; solo una prueba exitosa habilita la fuente. Las credenciales se almacenan cifradas con Fernet y jamás aparecen en respuestas o auditorías.
 
-`POST /api/v1/data-sources/{id}/sync/parties` sincroniza una página de terceros y conserva el cursor para la siguiente ejecución. Cada prueba y sincronización queda en `GET /api/v1/data-sources/{id}/connection-runs`, con actor, correlación, cursor, conteo y código de error, sin payloads sensibles. La primera referencia de API es Siigo, protegida por `SIIGO_INTEGRATION_ENABLED`; no hay proveedor prioritario y los conectores por archivo, agente local o base de datos usan el mismo ciclo. Ver `backend/docs/adr/0015-ciclo-de-vida-de-conexiones-externas.md`.
+`POST /api/v1/data-sources/{id}/sync/parties` crea un trabajo persistente y responde `202`; el worker lo procesa por páginas y conserva el cursor hasta completarlo. Se consulta con `GET /api/v1/data-sources/{id}/sync/jobs/{job_id}` o el listado de trabajos de la fuente. Hay un solo trabajo activo por fuente, reintentos con espera progresiva y una concesión recuperable si el worker se reinicia. Cada página queda además en `GET /api/v1/data-sources/{id}/connection-runs`, con actor, correlación, cursor, conteo y código de error, sin payloads sensibles. La primera referencia de API es Siigo, protegida por `SIIGO_INTEGRATION_ENABLED`; no hay proveedor prioritario y los conectores por archivo, agente local o base de datos usan el mismo ciclo. Ver `backend/docs/adr/0015-ciclo-de-vida-de-conexiones-externas.md` y `backend/docs/adr/0016-cola-persistente-de-sincronizacion.md`.

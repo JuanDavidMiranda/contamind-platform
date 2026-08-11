@@ -45,6 +45,17 @@ class ProviderRunStatus(str, Enum):
     FAILED = "failed"
 
 
+class ProviderSyncJobStatus(str, Enum):
+    """Estado persistente de una sincronizaci\u00f3n en segundo plano."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    RETRYING = "retrying"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class DataCapability(str, Enum):
     PARTIES = "parties"
     TAXES = "taxes"
@@ -177,3 +188,24 @@ class ProviderOperationResult(CanonicalModel):
     error_code: str | None = None
     correlation_id: str | None = None
     completed_at: datetime
+
+
+class ProviderSyncJobResult(CanonicalModel):
+    """Estado consultable de una sincronizaci\u00f3n de terceros encolada."""
+
+    id: UUID
+    data_source_id: UUID
+    provider_id: str
+    status: ProviderSyncJobStatus
+    page_size: int = Field(ge=1, le=100)
+    processed_records: int = Field(ge=0)
+    pages_processed: int = Field(ge=0)
+    attempt_count: int = Field(ge=0)
+    max_attempts: int = Field(ge=1)
+    cursor: str | None = None
+    error_code: str | None = None
+    correlation_id: str | None = None
+    available_at: datetime
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
