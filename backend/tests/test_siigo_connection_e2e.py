@@ -1,3 +1,4 @@
+import asyncio
 import json
 from uuid import uuid4
 
@@ -14,6 +15,7 @@ from app.models.data_source import (
 from app.models.user import User
 from app.providers.factory import ProviderFactory
 from app.providers.siigo import SiigoProviderAdapter
+from app.services.provider_connection_service import ProviderConnectionService
 from app.shared.security import create_access_token, hash_password
 
 pytestmark = pytest.mark.integration
@@ -47,6 +49,14 @@ def _client_factory(transport: httpx.MockTransport):
         return httpx.AsyncClient(transport=transport, **kwargs)
 
     return build_client
+
+
+def _process_next_sync_job():
+    db = SessionLocal()
+    try:
+        return asyncio.run(ProviderConnectionService(db).process_next_sync_job())
+    finally:
+        db.close()
 
 
 def test_siigo_connection_sync_audit_and_tenant_isolation_end_to_end(client, monkeypatch):
@@ -189,38 +199,44 @@ def test_siigo_connection_sync_audit_and_tenant_isolation_end_to_end(client, mon
     assert connection.json()["status"] == "succeeded"
     assert connection.json()["correlation_id"] == "siigo-e2e-connection"
 
-    first_sync = client.post(
+    sync_job = client.post(
         f"/api/v1/data-sources/{source_id}/sync/parties?page_size=1",
         headers=_headers(owner, "siigo-e2e-page-1"),
     )
-    second_sync = client.post(
+    assert sync_job.status_code == 202
+    job_id = sync_job.json()["id"]
+    assert sync_job.json()["status"] == "queued"
+    assert client.post(
         f"/api/v1/data-sources/{source_id}/sync/parties?page_size=1",
         headers=_headers(owner, "siigo-e2e-page-2"),
+    ).status_code == 409
+
+    first_page = _process_next_sync_job()
+    assert first_page is not None
+    assert first_page.status.value == "queued"
+    assert first_page.processed_records == 1
+    assert first_page.cursor == "2"
+    completed_job = _process_next_sync_job()
+    assert completed_job is not None
+    assert completed_job.status.value == "succeeded"
+    assert completed_job.processed_records == 2
+    assert completed_job.cursor is None
+
+    job_status = client.get(
+        f"/api/v1/data-sources/{source_id}/sync/jobs/{job_id}", headers=owner_headers
     )
-    assert first_sync.status_code == 200
-    assert first_sync.json()["processed_records"] == 1
-    assert first_sync.json()["cursor_before"] is None
-    assert first_sync.json()["cursor_after"] == "2"
-    assert second_sync.status_code == 200
-    assert second_sync.json()["processed_records"] == 1
-    assert second_sync.json()["cursor_before"] == "2"
-    assert second_sync.json()["cursor_after"] is None
+    assert job_status.status_code == 200
+    assert job_status.json()["status"] == "succeeded"
+    assert job_status.json()["pages_processed"] == 2
 
     runs = client.get(
         f"/api/v1/data-sources/{source_id}/connection-runs",
         headers=owner_headers,
     )
     assert runs.status_code == 200
-    assert [run["operation"] for run in runs.json()] == [
-        "sync_parties",
-        "sync_parties",
-        "connection_test",
-    ]
-    assert [run["correlation_id"] for run in runs.json()] == [
-        "siigo-e2e-page-2",
-        "siigo-e2e-page-1",
-        "siigo-e2e-connection",
-    ]
+    assert [run["operation"] for run in runs.json()].count("sync_parties") == 2
+    assert [run["correlation_id"] for run in runs.json()].count("siigo-e2e-page-1") == 2
+    assert [run["correlation_id"] for run in runs.json()].count("siigo-e2e-connection") == 1
 
     audit = client.get(f"/api/v1/companies/{company_id}/audit", headers=owner_headers)
     assert audit.status_code == 200
@@ -229,6 +245,10 @@ def test_siigo_connection_sync_audit_and_tenant_isolation_end_to_end(client, mon
     outsider_headers = _headers(outsider)
     assert client.get(
         f"/api/v1/data-sources/{source_id}/connection-runs",
+        headers=outsider_headers,
+    ).status_code == 403
+    assert client.get(
+        f"/api/v1/data-sources/{source_id}/sync/jobs/{job_id}",
         headers=outsider_headers,
     ).status_code == 403
     assert client.get(
@@ -276,7 +296,7 @@ def test_siigo_connection_sync_audit_and_tenant_isolation_end_to_end(client, mon
 
     serialized_outputs = "".join(
         response.text
-        for response in (connection, first_sync, second_sync, runs, audit)
+        for response in (connection, sync_job, job_status, runs, audit)
     )
     assert access_key not in serialized_outputs
     assert username not in serialized_outputs
