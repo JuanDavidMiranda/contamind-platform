@@ -33,4 +33,4 @@ def test_api_health_endpoint(client):
 def test_agents_endpoint(client):
     response = client.get("/api/v1/agents")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert "accounting_health" in response.json()

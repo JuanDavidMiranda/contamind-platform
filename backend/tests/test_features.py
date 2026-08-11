@@ -1,9 +1,11 @@
 import pytest
+from cryptography.fernet import Fernet
+from pydantic import ValidationError
 
 from app.ai.bootstrap import bootstrap as bootstrap_module
 from app.ai.tools.registry import ToolRegistry
 from app.config import features
-from app.config.settings import settings
+from app.config.settings import Settings, settings
 
 pytestmark = pytest.mark.unit
 
@@ -55,6 +57,29 @@ def test_is_provider_enabled_reads_provider_feature_flag(monkeypatch):
         {features.FEATURE_ALEGRA_INTEGRATION: True},
     )
     assert features.is_provider_enabled("alegra") is True
+
+
+def test_production_requires_an_openai_key_when_llm_is_enabled():
+    with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
+        Settings(
+            ENVIRONMENT="production",
+            AUTH_SECRET_KEY="test-auth-secret",
+            PROVIDER_CREDENTIALS_MASTER_KEY=Fernet.generate_key().decode(),
+            FEATURE_FLAGS={features.FEATURE_LLM: True},
+            OPENAI_API_KEY=None,
+        )
+
+
+def test_production_requires_an_openai_model_when_llm_is_enabled():
+    with pytest.raises(ValidationError, match="OPENAI_MODEL"):
+        Settings(
+            ENVIRONMENT="production",
+            AUTH_SECRET_KEY="test-auth-secret",
+            PROVIDER_CREDENTIALS_MASTER_KEY=Fernet.generate_key().decode(),
+            FEATURE_FLAGS={features.FEATURE_LLM: True},
+            OPENAI_API_KEY="test-api-key",
+            OPENAI_MODEL="   ",
+        )
 
 
 def test_bootstrap_registers_mock_when_enabled(monkeypatch):

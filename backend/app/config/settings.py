@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import Literal
 
 from cryptography.fernet import Fernet
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     AUTH_TOKEN_TTL_MINUTES: int = 480
     PLATFORM_ADMIN_EMAILS: str = ""
     FEATURE_FLAGS: dict[str, bool] = {}
+    OPENAI_API_KEY: SecretStr | None = None
+    OPENAI_MODEL: str = "gpt-5.6-terra"
+    OPENAI_TIMEOUT_SECONDS: float = Field(default=20, ge=1, le=120)
+    OPENAI_MAX_OUTPUT_TOKENS: int = Field(default=600, ge=64, le=4_000)
     SESSION_MAX_ACTIVE: int = 1000
     SESSION_TTL_SECONDS: int = 3600
     MAX_IMPORT_FILE_BYTES: int = 5_000_000
@@ -62,6 +66,27 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PROVIDER_CREDENTIALS_MASTER_KEY es obligatoria en los ambientes "
                 "staging y production."
+            )
+        if (
+            self.ENVIRONMENT in ("staging", "production")
+            and self.FEATURE_FLAGS.get("LLM_ENABLED", False)
+            and (
+                not self.OPENAI_API_KEY
+                or not self.OPENAI_API_KEY.get_secret_value().strip()
+            )
+        ):
+            raise ValueError(
+                "OPENAI_API_KEY es obligatoria cuando LLM_ENABLED está activo "
+                "en staging o production."
+            )
+        if (
+            self.ENVIRONMENT in ("staging", "production")
+            and self.FEATURE_FLAGS.get("LLM_ENABLED", False)
+            and not self.OPENAI_MODEL.strip()
+        ):
+            raise ValueError(
+                "OPENAI_MODEL es obligatoria cuando LLM_ENABLED está activo "
+                "en staging o production."
             )
         if self.PROVIDER_CREDENTIALS_MASTER_KEY:
             try:

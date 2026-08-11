@@ -57,7 +57,7 @@ docker compose up -d          # desde la raíz del repo
 La suite usa markers: `unit`, `integration` y `postgres` (opt-in, requiere contenedor en `127.0.0.1:5433`).
 
 ```powershell
-.\scripts\test.ps1            # por defecto: unit + integration (115 passed, 1 skipped)
+.\scripts\test.ps1            # por defecto: unit + integration (129 passed, 1 skipped)
 .\scripts\test-postgres.ps1   # añade la validación real de migraciones PostgreSQL
 ```
 
@@ -140,6 +140,16 @@ Las fuentes manuales activas pueden registrar impuestos, ítems, facturas, pagos
 ### Importación contable CSV/XLSX
 
 Las fuentes de archivos pueden importar impuestos, ítems, facturas, pagos y comprobantes con perfiles de mapeo por entidad. Las facturas y comprobantes agrupan sus líneas, resuelven referencias por código o documento y registran rechazos por fila sin descartar el lote completo. Ver `backend/docs/adr/0014-importacion-tabular-del-nucleo-contable.md`.
+
+### Agente de salud contable
+
+El agente combina un análisis determinista y de solo lectura con una capa conversacional opcional. La interfaz que debe usar un asistente de salud contable es `POST /api/v1/companies/{company_id}/agents/accounting-health/chat`: fija el agente durante toda la conversación y acepta preguntas libres dentro de su propósito, por ejemplo, “¿qué debo revisar primero?” o “¿cómo corrijo un comprobante descuadrado?”. El usuario debe tener un rol de consulta sobre la empresa (owner, admin, operator o viewer). El chat general `POST /api/v1/companies/{company_id}/chat` conserva la selección por intención y no fuerza llamadas al agente para preguntas arbitrarias.
+
+El backend siempre calcula primero las métricas y hallazgos verificables. Si LLM_ENABLED está activo y existe OPENAI_API_KEY, el modelo solo redacta una respuesta en español a partir de una proyección agregada del reporte; esa proyección no recibe company_id, filas de terceros, documentos, correos, credenciales ni permisos. La pregunta e historial se limitan y redactan por patrones conocidos; no constituyen una solución DLP completa, por lo que no se deben enviar datos personales ni secretos al chat. La llamada solicita Responses API sin estado de aplicación (`store=false`), usa un identificador de seguridad HMAC y un historial local limitado. La aplicación rechaza respuestas no ancladas a hallazgos o con cifras libres, valida los códigos citados y conserva el reporte determinista como fuente de verdad.
+
+Actualmente advierte sobre fuentes no disponibles, rechazos de importación, terceros incompletos o duplicados, ítems sin cuenta, facturas sin contraparte, pagos sin factura y comprobantes descuadrados. Cada ejecución deja únicamente metadatos de auditoría en agent_executions (actor, empresa, correlación, resultado y códigos de hallazgo), sin guardar el mensaje, prompt, respuesta del modelo ni reporte. Si el LLM está apagado, no tiene clave o falla, el diagnóstico determinista sigue disponible.
+
+Para habilitar la conversación, define OPENAI_API_KEY y activa LLM_ENABLED dentro de FEATURE_FLAGS; OPENAI_MODEL, OPENAI_TIMEOUT_SECONDS y OPENAI_MAX_OUTPUT_TOKENS permiten ajustar el proveedor. Antes de activarla en producción se requiere aprobación de privacidad, aviso al usuario y el acuerdo de tratamiento/retención aplicable al proveedor. El POST /api/v1/chat heredado continúa siendo anónimo y no puede activar este agente. Ver backend/docs/adr/0017-agente-de-salud-contable.md y backend/docs/adr/0018-capa-llm-conversacional-de-salud-contable.md.
 
 ### Conexiones externas y sincronización
 

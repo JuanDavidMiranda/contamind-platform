@@ -1,4 +1,5 @@
 from app.ai.workflows.chat.workflow import ChatWorkflow
+from app.ai.workflows.accounting_health.workflow import AccountingHealthWorkflow
 from app.ai.workflows.exogena.workflow import ExogenaWorkflow
 
 
@@ -8,6 +9,7 @@ class WorkflowManager:
 
         self._workflows = {
             "exogena": ExogenaWorkflow(),
+            "accounting_health": AccountingHealthWorkflow(),
             "chat": ChatWorkflow(),
         }
 

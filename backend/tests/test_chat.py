@@ -1,5 +1,8 @@
 import pytest
 
+from app.ai.core.base_result import BaseResult
+from app.services.chat_service import ChatService
+
 pytestmark = pytest.mark.integration
 
 
@@ -62,3 +65,34 @@ def test_rut_keyword_does_not_crash(client):
     response = _chat(client, "consulta el rut", "rut-1")
     assert response.status_code == 200
     assert response.json()["success"] is True
+
+
+def test_legacy_chat_never_runs_company_scoped_accounting_health_agent(client):
+    response = _chat(client, "revisa la salud contable", "legacy-health")
+    assert response.status_code == 200
+    assert response.json()["workflow"] == "chat"
+
+
+class _HealthConversationOrchestrator:
+    async def handle_message(self, message, context):
+        context.workflow = "accounting_health"
+        context.user_message = message
+        context.entities = {"document": "900111222"}
+        return BaseResult(success=True, message="ok")
+
+
+@pytest.mark.asyncio
+async def test_company_health_session_does_not_retain_the_raw_message_or_entities():
+    service = ChatService()
+    service.orchestrator = _HealthConversationOrchestrator()
+
+    await service.process_company(
+        "Revisa el NIT 900111222",
+        user_id=1,
+        company_id="company-1",
+        conversation_id="conversation-1",
+    )
+
+    context = service.sessions.get("company:company-1:user:1:conversation:conversation-1")
+    assert context.user_message == ""
+    assert context.entities == {}

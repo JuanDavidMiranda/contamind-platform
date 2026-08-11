@@ -1,4 +1,11 @@
-from pydantic import BaseModel
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+from app.ai.agents.accounting_health.schemas import (
+    AccountingHealthConversation,
+    AccountingHealthReport,
+)
 
 
 class ChatRequest(BaseModel):
@@ -15,3 +22,18 @@ class ChatResponse(BaseModel):
     response: str
 
     workflow: str | None = None
+
+
+class CompanyChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2_000)
+    conversation_id: UUID | None = None
+
+
+class CompanyChatResponse(BaseModel):
+    success: bool
+    response: str
+    conversation_id: UUID
+    workflow: str | None = None
+    agent_id: str | None = None
+    report: AccountingHealthReport | None = None
+    conversation: AccountingHealthConversation | None = None

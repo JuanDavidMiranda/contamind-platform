@@ -76,6 +76,7 @@ def test_migrations_apply_on_empty_database():
                     "provider_credentials",
                     "provider_sync_runs",
                     "provider_sync_jobs",
+                    "agent_executions",
                 } <= tables
                 version = connection.execute(
                     text("SELECT version_num FROM alembic_version")

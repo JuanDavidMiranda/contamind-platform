@@ -1,5 +1,7 @@
 import logging
 
+from app.ai.agents.accounting_health import AccountingHealthAgent
+from app.ai.registry import registry as agent_registry
 from app.ai.tools.registry import registry
 
 from app.ai.tools.consultar_obligaciones import ConsultarObligacionesTool
@@ -12,6 +14,8 @@ logger = logging.getLogger("contamind.bootstrap")
 
 
 def bootstrap() -> None:
+    agent_registry.register(AccountingHealthAgent())
+    logger.info("agent registered", extra={"agent": "accounting_health"})
     if is_enabled(FEATURE_MOCK_EXTERNAL_SERVICES, default=True):
         registry.register(ConsultarObligacionesTool())
         logger.info(

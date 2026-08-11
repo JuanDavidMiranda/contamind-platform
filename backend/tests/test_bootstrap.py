@@ -1,6 +1,7 @@
 import pytest
 
 from app.ai.bootstrap.bootstrap import bootstrap
+from app.ai.registry import registry as agent_registry
 from app.ai.tools.registry import registry
 
 pytestmark = pytest.mark.unit
@@ -12,3 +13,4 @@ def test_bootstrap_registers_mock_tool():
     assert tool.name == "Consultar obligaciones"
     assert tool.is_mock is True
     assert "MOCK" in tool.description
+    assert agent_registry.exists("accounting_health")

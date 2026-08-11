@@ -5,6 +5,5 @@
 ruff==0.16.1
 
 # Testing
-httpx2==2.9.1
 pytest==9.1.1
 pytest-asyncio==1.4.0
