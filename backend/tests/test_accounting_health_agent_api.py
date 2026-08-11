@@ -334,7 +334,7 @@ def test_company_chat_answers_a_free_question_with_the_llm_narrator(client):
             f"/api/v1/companies/{company_id}/agents/accounting-health/chat",
             headers=_headers(owner),
             json={
-                "message": "¿Y qué pasa con exógena?",
+                "message": "¿Cómo corrijo ese hallazgo?",
                 "conversation_id": conversation_id,
             },
         )
@@ -363,7 +363,7 @@ def test_company_chat_answers_a_free_question_with_the_llm_narrator(client):
     }
     assert narrator.questions == [
         "¿Qué debería revisar primero?",
-        "¿Y qué pasa con exógena?",
+        "¿Cómo corrijo ese hallazgo?",
     ]
     assert narrator.histories[0] == []
     assert narrator.histories[1] == [
@@ -431,6 +431,64 @@ def test_health_agent_blocks_sensitive_input_before_calling_the_narrator(client)
     assert body["conversation"]["llm_used"] is False
     assert narrator.questions == []
     assert "900111222" not in response.text
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "¿Cuándo debo presentar la próxima exógena?",
+        "¿Cuándo debo presentar la próxima exogema?",
+    ],
+)
+def test_health_agent_blocks_exogena_and_a_single_typo_before_calling_the_narrator(
+    client,
+    monkeypatch,
+    question,
+):
+    suffix = uuid4().hex
+    owner = _create_user(f"health-out-of-scope-{suffix}@test.local")
+    onboarding = client.post(
+        "/api/v1/companies/onboarding",
+        headers=_headers(owner),
+        json={"tenant_name": f"Tenant alcance {suffix}", "company_name": "Empresa alcance"},
+    )
+    assert onboarding.status_code == 201
+    company_id = onboarding.json()["company"]["id"]
+    monkeypatch.setattr(settings, "FEATURE_FLAGS", {FEATURE_LLM: False})
+    narrator = _StubNarrator()
+    original_agent = agent_registry.get("accounting_health")
+    agent_registry.register(AccountingHealthAgent(conversation_narrator=narrator))
+    try:
+        response = client.post(
+            f"/api/v1/companies/{company_id}/agents/accounting-health/chat",
+            headers=_headers(owner),
+            json={"message": question},
+        )
+    finally:
+        agent_registry.register(original_agent)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflow"] == "accounting_health"
+    assert body["agent_id"] == "accounting_health"
+    assert body["response"] == body["conversation"]["response"]
+    assert body["conversation"] == {
+        "outcome": "out_of_scope",
+        "response": (
+            "Este agente no responde sobre información exógena ni sus fechas de "
+            "presentación. Puedo ayudarte a revisar los hallazgos, la calidad y la "
+            "integridad de la información contable disponible."
+        ),
+        "evidence": [],
+        "suggested_questions": [
+            "¿Qué hallazgo debo revisar primero?",
+            "¿Cómo puedo corregir los hallazgos detectados?",
+            "¿Qué significa cada alerta de salud contable?",
+        ],
+        "llm_used": False,
+        "llm_model": None,
+    }
+    assert narrator.questions == []
 
 
 def test_health_agent_audits_an_llm_fallback_without_storing_conversation(client, monkeypatch):

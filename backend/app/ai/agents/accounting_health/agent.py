@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 import logging
+import re
+import unicodedata
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -33,6 +35,16 @@ from app.services.accounting_health_service import AccountingHealthService
 logger = logging.getLogger("contamind.accounting_health_agent")
 
 
+# Esta ruta fuerza el agente de salud contable. Antes de acudir a la capa
+# conversacional, identifica dominios que el producto resuelve en otro flujo.
+# Las expresiones se evalúan sobre texto sin tildes para que "exógena" y
+# "exogena" tengan el mismo comportamiento, incluso sin LLM configurado.
+_OUT_OF_SCOPE_TOPIC_PATTERNS = (
+    re.compile(r"\bmedios\s+magneticos\b"),
+)
+_OUT_OF_SCOPE_TERMS = ("exogena",)
+
+
 class AccountingHealthAgent(BaseAgent):
     """Combina hechos deterministas con una narración conversacional restringida."""
 
@@ -42,7 +54,7 @@ class AccountingHealthAgent(BaseAgent):
         "Responde preguntas sobre cobertura, calidad e integridad usando "
         "hallazgos contables verificables."
     )
-    version = "1.2.0"
+    version = "1.2.1"
 
     def __init__(
         self,
@@ -218,6 +230,19 @@ class AccountingHealthAgent(BaseAgent):
             self._remember_turn(context, context.user_message, conversation.response)
             return conversation
 
+        if self._is_out_of_scope_question(context.user_message):
+            conversation = AccountingHealthConversation(
+                outcome="out_of_scope",
+                response=(
+                    "Este agente no responde sobre información exógena ni sus fechas de "
+                    "presentación. Puedo ayudarte a revisar los hallazgos, la calidad y la "
+                    "integridad de la información contable disponible."
+                ),
+                suggested_questions=self._default_suggested_questions(),
+            )
+            self._remember_turn(context, context.user_message, conversation.response)
+            return conversation
+
         narration: AccountingHealthNarration | None = None
         try:
             narration = await self._conversation_narrator.narrate(
@@ -293,6 +318,50 @@ class AccountingHealthAgent(BaseAgent):
             "¿Cómo puedo corregir los hallazgos detectados?",
             "¿Qué significa cada alerta de salud contable?",
         )
+
+    @staticmethod
+    def _is_out_of_scope_question(question: str) -> bool:
+        """Bloquea de forma local los dominios conocidos ajenos a salud contable."""
+
+        normalized = "".join(
+            character
+            for character in unicodedata.normalize("NFKD", question.casefold())
+            if not unicodedata.combining(character)
+        )
+        if any(pattern.search(normalized) for pattern in _OUT_OF_SCOPE_TOPIC_PATTERNS):
+            return True
+        words = re.findall(r"[a-z]+", normalized)
+        return any(
+            AccountingHealthAgent._is_one_edit_from(word, term)
+            for word in words
+            for term in _OUT_OF_SCOPE_TERMS
+        )
+
+    @staticmethod
+    def _is_one_edit_from(value: str, target: str) -> bool:
+        """Acepta una errata mínima sin usar coincidencia difusa amplia."""
+
+        if value == target:
+            return True
+        if abs(len(value) - len(target)) > 1:
+            return False
+        if len(value) == len(target):
+            return sum(left != right for left, right in zip(value, target, strict=True)) <= 1
+
+        shorter, longer = (value, target) if len(value) < len(target) else (target, value)
+        shorter_index = 0
+        longer_index = 0
+        edits = 0
+        while shorter_index < len(shorter) and longer_index < len(longer):
+            if shorter[shorter_index] == longer[longer_index]:
+                shorter_index += 1
+                longer_index += 1
+                continue
+            edits += 1
+            if edits > 1:
+                return False
+            longer_index += 1
+        return True
 
     @staticmethod
     def _history(context: Context) -> list[dict[str, str]]:
