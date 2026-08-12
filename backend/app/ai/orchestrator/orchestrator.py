@@ -40,7 +40,9 @@ class Orchestrator:
         # El agente no usa entidades; evitamos retener identificadores extraídos
         # de una pregunta que puede contener datos sensibles.
         context.entities = (
-            {} if workflow_id == "accounting_health" else self.extractor.extract(message)
+            {}
+            if workflow_id in {"accounting_health", "receivables"}
+            else self.extractor.extract(message)
         )
 
         execution = WorkflowExecution(

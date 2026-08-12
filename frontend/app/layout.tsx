@@ -3,12 +3,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ContaMind | Salud contable",
-  description: "Diagnóstico conversacional y verificable de salud contable.",
+  title: "ContaMind | Agentes contables",
+  description: "Diagnósticos verificables de salud contable y cartera.",
   openGraph: {
-    title: "ContaMind | Salud contable",
-    description: "Diagnóstico conversacional y verificable de salud contable.",
-    images: ["/og.png"],
+    title: "ContaMind | Agentes contables",
+    description: "Diagnósticos verificables de salud contable y cartera.",
+    images: ["/og-agentes.png"],
   },
 };
 

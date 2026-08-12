@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, JSON, Numeric, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -51,6 +51,15 @@ class InvoiceRecord(Base):
     __tablename__ = "invoices"
     __table_args__ = (
         UniqueConstraint("company_id", "data_source_id", "idempotency_key", name="uq_invoices_source_idempotency"),
+        CheckConstraint(
+            "due_date IS NULL OR due_date >= issue_date",
+            name="ck_invoices_due_date_on_or_after_issue",
+        ),
+        CheckConstraint(
+            "payment_terms_days IS NULL OR payment_terms_days BETWEEN 0 AND 3650",
+            name="ck_invoices_payment_terms_days_range",
+        ),
+        Index("ix_invoices_company_type_due_date", "company_id", "invoice_type", "due_date"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -58,6 +67,8 @@ class InvoiceRecord(Base):
     data_source_id: Mapped[str] = mapped_column(ForeignKey("company_data_sources.id"), index=True)
     invoice_type: Mapped[str] = mapped_column(String(30))
     issue_date: Mapped[date] = mapped_column(Date)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    payment_terms_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     issuer_party_id: Mapped[str | None] = mapped_column(ForeignKey("parties.id"), nullable=True)
     recipient_party_id: Mapped[str | None] = mapped_column(ForeignKey("parties.id"), nullable=True)
     currency_code: Mapped[str] = mapped_column(String(3))
@@ -71,7 +82,9 @@ class InvoiceRecord(Base):
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     idempotency_key: Mapped[str] = mapped_column(String(128))
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class InvoiceLineRecord(Base):

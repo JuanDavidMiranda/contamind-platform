@@ -1,13 +1,13 @@
 """Modelo contable canónico v1, independiente de cualquier proveedor."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import Enum
 import re
 from typing import Annotated, Generic, TypeVar
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 CANONICAL_VERSION = "1.0.0"
 
@@ -165,6 +165,8 @@ class Invoice(CanonicalModel):
     company_id: UUID
     invoice_type: InvoiceType
     issue_date: date
+    due_date: date | None = None
+    payment_terms_days: int | None = Field(default=None, ge=0, le=3650)
     issuer_party_id: UUID | None = None
     recipient_party_id: UUID | None = None
     lines: tuple[InvoiceLine, ...] = Field(min_length=1)
@@ -177,6 +179,22 @@ class Invoice(CanonicalModel):
     status: str | None = Field(default=None, max_length=50)
     dian_reference: str | None = Field(default=None, max_length=255)
     external_id: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def validate_payment_terms(self) -> "Invoice":
+        due_date = self.due_date
+        if self.payment_terms_days is not None and due_date is None:
+            due_date = self.issue_date + timedelta(days=self.payment_terms_days)
+        if due_date is not None and due_date < self.issue_date:
+            raise ValueError("La fecha de vencimiento no puede ser anterior a la fecha de emisión.")
+        if due_date is not None and self.payment_terms_days is not None:
+            expected_due_date = self.issue_date + timedelta(days=self.payment_terms_days)
+            if due_date != expected_due_date:
+                raise ValueError(
+                    "La fecha de vencimiento no coincide con los días de condiciones de pago."
+                )
+        object.__setattr__(self, "due_date", due_date)
+        return self
 
 
 class Payment(CanonicalModel):

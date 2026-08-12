@@ -1,5 +1,6 @@
 """Captura manual idempotente del núcleo contable canónico."""
 
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID, uuid4
 
@@ -124,7 +125,9 @@ class ManualAccountingService:
         data_source_id: UUID,
         *,
         invoice_type: InvoiceType,
-        issue_date,
+        issue_date: date,
+        due_date: date | None,
+        payment_terms_days: int | None,
         issuer_party_id: UUID | None,
         recipient_party_id: UUID | None,
         lines: tuple[InvoiceLine, ...],
@@ -160,10 +163,13 @@ class ManualAccountingService:
         total = self._money(subtotal + tax_total - withholding_total)
         if total < 0:
             raise app_error("VALIDATION_ERROR", message="El total de la factura no puede ser negativo.")
+        due_date = self._resolve_due_date(issue_date, due_date, payment_terms_days)
         invoice = Invoice(
             company_id=source.company_id,
             invoice_type=invoice_type,
             issue_date=issue_date,
+            due_date=due_date,
+            payment_terms_days=payment_terms_days,
             issuer_party_id=issuer_party_id,
             recipient_party_id=recipient_party_id,
             lines=lines,
@@ -182,6 +188,8 @@ class ManualAccountingService:
                 data_source_id=str(source.id),
                 invoice_type=invoice.invoice_type.value,
                 issue_date=invoice.issue_date,
+                due_date=invoice.due_date,
+                payment_terms_days=invoice.payment_terms_days,
                 issuer_party_id=str(invoice.issuer_party_id) if invoice.issuer_party_id else None,
                 recipient_party_id=str(invoice.recipient_party_id) if invoice.recipient_party_id else None,
                 currency_code=invoice.currency.code,
@@ -195,6 +203,7 @@ class ManualAccountingService:
                 status=invoice.status,
                 idempotency_key=idempotency_key,
                 created_by_user_id=actor_user_id,
+                updated_by_user_id=actor_user_id,
             )
         )
         for line in invoice.lines:
@@ -381,6 +390,33 @@ class ManualAccountingService:
         return value.quantize(_CENT, rounding=ROUND_HALF_UP)
 
     @staticmethod
+    def _resolve_due_date(
+        issue_date: date,
+        due_date: date | None,
+        payment_terms_days: int | None,
+    ) -> date | None:
+        if payment_terms_days is not None:
+            if not 0 <= payment_terms_days <= 3650:
+                raise app_error(
+                    "VALIDATION_ERROR",
+                    message="Los días de condiciones de pago deben estar entre 0 y 3650.",
+                )
+            expected_due_date = issue_date + timedelta(days=payment_terms_days)
+            if due_date is None:
+                return expected_due_date
+            if due_date != expected_due_date:
+                raise app_error(
+                    "VALIDATION_ERROR",
+                    message="La fecha de vencimiento no coincide con los días de condiciones de pago.",
+                )
+        if due_date is not None and due_date < issue_date:
+            raise app_error(
+                "VALIDATION_ERROR",
+                message="La fecha de vencimiento no puede ser anterior a la fecha de emisión.",
+            )
+        return due_date
+
+    @staticmethod
     def _tax_from_record(record: TaxRecord) -> Tax:
         return Tax(
             id=UUID(record.id),
@@ -423,6 +459,8 @@ class ManualAccountingService:
             company_id=UUID(record.company_id),
             invoice_type=record.invoice_type,
             issue_date=record.issue_date,
+            due_date=record.due_date,
+            payment_terms_days=record.payment_terms_days,
             issuer_party_id=UUID(record.issuer_party_id) if record.issuer_party_id else None,
             recipient_party_id=UUID(record.recipient_party_id) if record.recipient_party_id else None,
             lines=lines,

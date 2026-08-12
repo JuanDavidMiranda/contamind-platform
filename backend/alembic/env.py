@@ -12,6 +12,7 @@ import app.models.agent  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.data_source  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.organization  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.accounting  # noqa: F401  (registra modelos en Base.metadata)
+import app.models.collection_followup  # noqa: F401  (registra modelos en Base.metadata)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

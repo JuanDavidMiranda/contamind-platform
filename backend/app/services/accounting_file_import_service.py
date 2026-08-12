@@ -94,10 +94,19 @@ class AccountingFileImportService:
             try:
                 first = group[0][1]
                 lines = tuple(self._invoice_line(profile, row, source.company_id) for _, row in group)
+                due_date = self._consistent_group_value(profile, group, "due_date", self._date)
+                payment_terms_days = self._consistent_group_value(
+                    profile,
+                    group,
+                    "payment_terms_days",
+                    self._integer,
+                )
                 self._manual.create_invoice(
                     source.id,
                     invoice_type=InvoiceType(self._required(profile, first, "invoice_type")),
                     issue_date=self._date(profile, first, "issue_date", required=True),
+                    due_date=due_date,
+                    payment_terms_days=payment_terms_days,
                     issuer_party_id=self._party_id(profile, first, source.company_id, "issuer"),
                     recipient_party_id=self._party_id(profile, first, source.company_id, "recipient"),
                     lines=lines,
@@ -207,6 +216,18 @@ class AccountingFileImportService:
             except ValueError as exc:
                 rejections.append(self._rejection(row_number, exc))
         return groups, rejections
+
+    def _consistent_group_value(self, profile, group, field, parser):
+        values = [
+            parser(profile, row, field)
+            for _, row in group
+            if self._value(profile, row, field) is not None
+        ]
+        if not values:
+            return None
+        if any(value != values[0] for value in values[1:]):
+            raise ValueError(f"Las filas de una factura deben coincidir en '{field}'.")
+        return values[0]
 
     def _party_id(self, profile, row, company_id, prefix):
         explicit = self._value(profile, row, f"{prefix}_party_id")
@@ -382,6 +403,15 @@ class AccountingFileImportService:
             return Decimal(value.replace(".", "").replace(",", ".")) if "," in value else Decimal(value)
         except InvalidOperation as exc:
             raise ValueError(f"'{field}' debe ser un número válido.") from exc
+
+    def _integer(self, profile, row, field):
+        value = self._value(profile, row, field)
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"'{field}' debe ser un entero válido.") from exc
 
     def _date(self, profile, row, field, *, required=False):
         value = self._required(profile, row, field) if required else self._value(profile, row, field)

@@ -151,6 +151,55 @@ Actualmente advierte sobre fuentes no disponibles, rechazos de importación, ter
 
 Para habilitar la conversación, define OPENAI_API_KEY y activa LLM_ENABLED dentro de FEATURE_FLAGS; OPENAI_MODEL, OPENAI_TIMEOUT_SECONDS y OPENAI_MAX_OUTPUT_TOKENS permiten ajustar el proveedor. Antes de activarla en producción se requiere aprobación de privacidad, aviso al usuario y el acuerdo de tratamiento/retención aplicable al proveedor. El POST /api/v1/chat heredado continúa siendo anónimo y no puede activar este agente. Ver backend/docs/adr/0017-agente-de-salud-contable.md y backend/docs/adr/0018-capa-llm-conversacional-de-salud-contable.md.
 
+### Agente de cartera
+
+**Estado y supuestos al 2026-08-12.** El agente analiza cartera de facturas de venta y pagos ya registrados; no concilia extractos bancarios, no calcula intereses ni ejecuta comunicaciones o recaudos. Sus resultados son apoyo operativo y requieren revisión humana antes de una decisión contable, financiera o de cobro.
+
+#### Datos de vencimiento e importación
+
+Las facturas canónicas, la captura manual y las importaciones CSV/XLSX aceptan `due_date` y `payment_terms_days`. Los días de pago se validan entre `0` y `3650`; `0` es válido. Si se informa solo `payment_terms_days`, se deriva el vencimiento desde la fecha de expedición. Si se informan ambos valores, deben ser coherentes; una fecha anterior a la expedición o datos inconsistentes entre líneas de la misma factura se rechazan. Las facturas históricas pueden permanecer sin vencimiento hasta que se completen explícitamente.
+
+#### Diagnóstico y antigüedad
+
+`POST /api/v1/companies/{company_id}/agents/receivables/chat` exige una membresía de consulta (`owner`, `admin`, `operator` o `viewer`) y calcula primero un reporte determinista de solo lectura. Incluye saldos abiertos separados por moneda, pagos parciales o superiores, pagos asociados en moneda distinta, fechas faltantes, vencimientos y antigüedad: no vencida, vence hoy, 1–30, 31–60, 61–90 y más de 90 días, además de la categoría sin fecha de vencimiento. Los pagos en otra moneda no se compensan automáticamente. También muestra promedios de recaudo de facturas liquidadas y el estado de seguimientos/promesas vigentes o incumplidas.
+
+El chat no devuelve clientes, documentos ni facturas individuales. `agent_executions` conserva únicamente metadatos de auditoría de la ejecución (actor, empresa, correlación, estado y códigos de hallazgo), sin mensaje, prompt, respuesta del modelo ni reporte completo.
+
+#### Cobertura conversacional y límites
+
+El chat cubre consultas agregadas y verificables sobre todo el módulo de cartera. Puede explicar prioridades y alertas, cantidades de facturas de venta abiertas, sin pago, con pago parcial o superior, vencidas o por vencer, y la antigüedad por rango. También responde por saldos pendientes **separados por moneda**, vencimientos sin fecha, pagos en moneda incompatible, facturas sin tercero, promedios de recaudo de facturas liquidadas y el estado de seguimientos, promesas abiertas o incumplidas. Puede aclarar qué representa una alerta y recomendar la siguiente revisión operativa; no convierte ni suma monedas distintas.
+
+Las preguntas por una factura, cliente, pago, número, consecutivo, referencia o cualquier otro dato individual no se responden por el chat. Este explica el límite de privacidad y dirige al usuario autorizado a **Cartera operativa**, donde está el detalle paginado. Las solicitudes para crear, modificar, cobrar, enviar comunicaciones, registrar pagos o gestionar un seguimiento también están fuera del alcance conversacional: se realizan mediante las rutas operativas autorizadas y sus confirmaciones.
+
+Cuando una pregunta pide una métrica que el reporte no calcula o no puede determinar con los datos disponibles —por ejemplo, proyección de caja, intereses, conciliación bancaria, riesgo crediticio, decisiones jurídicas, tributarias o de otros módulos— el agente lo indica con transparencia y no estima ni inventa cifras. Si falta un dato que sí pertenece a cartera, comunica la alerta de calidad correspondiente y sugiere completarlo en la fuente o revisarlo en la vista operativa.
+
+#### Operación autorizada de cartera
+
+La información individual se ofrece por una API operativa separada, nunca por el chat ni al LLM:
+
+- `GET /api/v1/companies/{company_id}/receivables/open-items` lista facturas de venta abiertas paginadas, su saldo, vencimiento, antigüedad, moneda y último estado de seguimiento. Acepta `as_of`, `limit` y `offset`.
+- `PATCH /api/v1/companies/{company_id}/receivables/invoices/{invoice_id}/terms` corrige vencimiento o condiciones de pago únicamente con `confirmed: true`. Registra quién y cuándo actualizó el dato; puede limpiar ambos valores enviando ambos como `null`.
+- `GET|POST /api/v1/companies/{company_id}/collection-followups` y `PATCH /api/v1/companies/{company_id}/collection-followups/{followup_id}` gestionan seguimientos. Los estados válidos son `pending`, `contacted`, `promise_to_pay`, `resolved` y `cancelled`; una promesa exige `promised_date` y esa fecha no aplica a los demás estados.
+
+Los roles de consulta pueden leer ítems abiertos y seguimientos. Solo `owner`, `admin` y `operator` de una empresa activa pueden modificar términos o crear/editar seguimientos, siempre con confirmación explícita. Los seguimientos conservan actor y marcas de tiempo; sus notas son opcionales, de máximo 280 caracteres y se rechazan si contienen patrones de correo, identificadores numéricos directos o enlaces. Esa validación reduce el riesgo, pero no reemplaza una política DLP ni el criterio del usuario: no escribir datos personales, credenciales, cuentas ni información de contacto.
+
+#### Capa LLM opcional y activación productiva
+
+Por defecto `LLM_ENABLED=false`. Cuando se habilita y existe una clave configurada fuera del repositorio, la capa conversacional usa Responses API con `store: false`, identificador de seguridad HMAC, historial local reducido y una proyección agregada del reporte. No envía `company_id`, facturas, clientes, documentos, correos, credenciales ni permisos. La respuesta debe ajustarse a un esquema estructurado, citar códigos de hallazgo existentes y no puede ejecutar acciones. Las entradas y salidas se limitan y redactan por patrones conocidos; no son una garantía DLP.
+
+`store: false` no equivale por sí solo a retención cero ni elimina todos los registros del proveedor: la documentación oficial de OpenAI explica la retención de estado y que, salvo controles aprobados, pueden existir registros de monitoreo de abuso. Revísese la [guía de controles de datos de OpenAI](https://developers.openai.com/api/docs/guides/your-data#default-usage-policies-by-endpoint) antes de activar el servicio.
+
+Si el LLM está apagado, falta su configuración o falla/entrega una salida inválida, el agente responde con la explicación determinista aplicable y conserva el diagnóstico verificable. Si una narración habilitada falla, además audita la ejecución como degradada (`LLM_UNAVAILABLE`); las preguntas ya resueltas localmente no llaman al LLM y se auditan como exitosas. El chat no presenta la conversación como temporalmente no disponible ni inventa una interpretación.
+
+Para activarlo en producción:
+
+1. Complete la evaluación de privacidad, aviso al usuario, contrato y retención aplicables; confirme que el uso de agregados y mensajes cumple la política interna.
+2. Guarde `OPENAI_API_KEY` exclusivamente en el gestor de secretos del ambiente; no la copie a `.env.example`, código, logs ni tickets.
+3. Configure `AUTH_SECRET_KEY`, `OPENAI_MODEL`, límites de tiempo/salida y `FEATURE_FLAGS` con `LLM_ENABLED=true` en el ambiente de despliegue.
+4. Ejecute pruebas funcionales y de seguridad con datos no productivos, incluyendo preguntas con PII, instrucciones de escritura, inyecciones y caídas del proveedor; habilite el cambio de forma gradual y supervise auditorías degradadas.
+
+Ver `backend/docs/adr/0019-agente-de-cartera.md` para las decisiones y límites del diseño.
+
 ### Conexiones externas y sincronización
 
 Las fuentes con proveedor se crean en estado `pending`. Un administrador configura credenciales mediante `PUT /api/v1/data-sources/{id}/credentials` y ejecuta `POST /api/v1/data-sources/{id}/connection-test`; solo una prueba exitosa habilita la fuente. Las credenciales se almacenan cifradas con Fernet y jamás aparecen en respuestas o auditorías.

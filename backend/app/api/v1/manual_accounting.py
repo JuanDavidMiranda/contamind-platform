@@ -52,6 +52,8 @@ class ManualItemCreate(BaseModel):
 class ManualInvoiceCreate(BaseModel):
     invoice_type: InvoiceType
     issue_date: date
+    due_date: date | None = None
+    payment_terms_days: int | None = Field(default=None, ge=0, le=3650)
     issuer_party_id: UUID | None = None
     recipient_party_id: UUID | None = None
     lines: tuple[InvoiceLine, ...] = Field(min_length=1)
