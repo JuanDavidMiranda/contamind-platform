@@ -15,6 +15,7 @@ from app.ai.agents.accounting_health.schemas import (
     AccountingHealthSummary,
 )
 from app.models.accounting import (
+    InvoiceLineRecord,
     InvoiceRecord,
     ItemRecord,
     JournalEntryLineRecord,
@@ -203,6 +204,42 @@ class AccountingHealthService:
                 )
             )
 
+        invoices_without_lines = self._invoices_without_lines_count(company_id)
+        if invoices_without_lines:
+            findings.append(
+                self._finding(
+                    "INVOICES_WITHOUT_LINES",
+                    AccountingHealthSeverity.WARNING,
+                    "Hay facturas sin líneas de detalle para respaldar sus totales.",
+                    {"invoices": invoices_without_lines},
+                    "Completa el detalle de cada factura antes de usarla en conciliaciones o reportes.",
+                )
+            )
+
+        subtotal_mismatches = self._invoice_subtotal_mismatch_count(company_id)
+        if subtotal_mismatches:
+            findings.append(
+                self._finding(
+                    "INVOICE_SUBTOTAL_MISMATCH",
+                    AccountingHealthSeverity.WARNING,
+                    "Hay facturas cuyo subtotal no coincide con la suma de sus líneas.",
+                    {"invoices": subtotal_mismatches},
+                    "Revisa las cantidades, precios y subtotal importados antes de contabilizar esas facturas.",
+                )
+            )
+
+        total_mismatches = self._invoice_total_mismatch_count(company_id)
+        if total_mismatches:
+            findings.append(
+                self._finding(
+                    "INVOICE_TOTAL_MISMATCH",
+                    AccountingHealthSeverity.WARNING,
+                    "Hay facturas cuyo total no coincide con subtotal, impuestos y retenciones.",
+                    {"invoices": total_mismatches},
+                    "Corrige los importes de la factura antes de usarla en saldos o reportes financieros.",
+                )
+            )
+
         unlinked_payments = self._count(
             PaymentRecord,
             company_id,
@@ -219,6 +256,30 @@ class AccountingHealthService:
                 )
             )
 
+        payments_before_invoice = self._payments_before_invoice_count(company_id)
+        if payments_before_invoice:
+            findings.append(
+                self._finding(
+                    "PAYMENTS_BEFORE_INVOICE",
+                    AccountingHealthSeverity.WARNING,
+                    "Hay pagos vinculados con fecha anterior a la emisión de su factura.",
+                    {"payments": payments_before_invoice},
+                    "Confirma si se trata de un anticipo y corrige la relación o las fechas si corresponde.",
+                )
+            )
+
+        overpaid_invoices = self._overpaid_invoice_count(company_id)
+        if overpaid_invoices:
+            findings.append(
+                self._finding(
+                    "OVERPAID_INVOICES",
+                    AccountingHealthSeverity.WARNING,
+                    "Hay facturas cuyos pagos vinculados superan el total registrado en la misma moneda.",
+                    {"invoices": overpaid_invoices},
+                    "Verifica pagos duplicados, anticipos o notas de ajuste antes de conciliar esas facturas.",
+                )
+            )
+
         unbalanced_journals = self._unbalanced_journal_count(company_id)
         if unbalanced_journals:
             findings.append(
@@ -228,6 +289,30 @@ class AccountingHealthService:
                     "Hay comprobantes cuyo débito y crédito no cuadran.",
                     {"journal_entries": unbalanced_journals},
                     "Corrige esos comprobantes antes de cualquier cierre o reporte financiero.",
+                )
+            )
+
+        journals_without_lines = self._journals_without_lines_count(company_id)
+        if journals_without_lines:
+            findings.append(
+                self._finding(
+                    "JOURNALS_WITHOUT_LINES",
+                    AccountingHealthSeverity.CRITICAL,
+                    "Hay comprobantes sin líneas contables.",
+                    {"journal_entries": journals_without_lines},
+                    "Completa o anula esos comprobantes antes de cualquier cierre o reporte financiero.",
+                )
+            )
+
+        journal_lines_with_both_sides = self._journal_lines_with_both_sides_count(company_id)
+        if journal_lines_with_both_sides:
+            findings.append(
+                self._finding(
+                    "JOURNAL_LINES_WITH_BOTH_SIDES",
+                    AccountingHealthSeverity.CRITICAL,
+                    "Hay líneas contables con débito y crédito al mismo tiempo.",
+                    {"journal_entries": journal_lines_with_both_sides},
+                    "Separa cada movimiento en una línea de débito o de crédito antes de continuar.",
                 )
             )
         return findings
@@ -256,6 +341,99 @@ class AccountingHealthService:
             ).scalars()
         )
         return len(groups), sum(int(count) - 1 for count in groups)
+
+    def _invoices_without_lines_count(self, company_id: str) -> int:
+        return self._grouped_count(
+            select(InvoiceRecord.id)
+            .outerjoin(InvoiceLineRecord, InvoiceLineRecord.invoice_id == InvoiceRecord.id)
+            .where(InvoiceRecord.company_id == company_id)
+            .group_by(InvoiceRecord.id)
+            .having(func.count(InvoiceLineRecord.id) == 0)
+        )
+
+    def _invoice_subtotal_mismatch_count(self, company_id: str) -> int:
+        line_subtotal = func.round(
+            func.coalesce(
+                func.sum(InvoiceLineRecord.quantity * InvoiceLineRecord.unit_price),
+                0,
+            ),
+            2,
+        )
+        return self._grouped_count(
+            select(InvoiceRecord.id)
+            .join(InvoiceLineRecord, InvoiceLineRecord.invoice_id == InvoiceRecord.id)
+            .where(InvoiceRecord.company_id == company_id)
+            .group_by(InvoiceRecord.id)
+            .having(InvoiceRecord.subtotal != line_subtotal)
+        )
+
+    def _invoice_total_mismatch_count(self, company_id: str) -> int:
+        expected_total = (
+            InvoiceRecord.subtotal + InvoiceRecord.tax_total - InvoiceRecord.withholding_total
+        )
+        return self._count(
+            InvoiceRecord,
+            company_id,
+            InvoiceRecord.total != expected_total,
+        )
+
+    def _payments_before_invoice_count(self, company_id: str) -> int:
+        return int(
+            self._db.scalar(
+                select(func.count(PaymentRecord.id))
+                .join(InvoiceRecord, InvoiceRecord.id == PaymentRecord.invoice_id)
+                .where(
+                    PaymentRecord.company_id == company_id,
+                    PaymentRecord.payment_date < InvoiceRecord.issue_date,
+                )
+            )
+            or 0
+        )
+
+    def _overpaid_invoice_count(self, company_id: str) -> int:
+        paid_amount = func.coalesce(func.sum(PaymentRecord.amount), 0)
+        return self._grouped_count(
+            select(InvoiceRecord.id)
+            .join(PaymentRecord, PaymentRecord.invoice_id == InvoiceRecord.id)
+            .where(
+                InvoiceRecord.company_id == company_id,
+                PaymentRecord.currency_code == InvoiceRecord.currency_code,
+            )
+            .group_by(InvoiceRecord.id)
+            .having(paid_amount > InvoiceRecord.total)
+        )
+
+    def _journals_without_lines_count(self, company_id: str) -> int:
+        return self._grouped_count(
+            select(JournalEntryRecord.id)
+            .outerjoin(
+                JournalEntryLineRecord,
+                JournalEntryLineRecord.journal_entry_id == JournalEntryRecord.id,
+            )
+            .where(JournalEntryRecord.company_id == company_id)
+            .group_by(JournalEntryRecord.id)
+            .having(func.count(JournalEntryLineRecord.id) == 0)
+        )
+
+    def _journal_lines_with_both_sides_count(self, company_id: str) -> int:
+        return int(
+            self._db.scalar(
+                select(func.count(func.distinct(JournalEntryRecord.id)))
+                .join(
+                    JournalEntryLineRecord,
+                    JournalEntryLineRecord.journal_entry_id == JournalEntryRecord.id,
+                )
+                .where(
+                    JournalEntryRecord.company_id == company_id,
+                    JournalEntryLineRecord.debit > 0,
+                    JournalEntryLineRecord.credit > 0,
+                )
+            )
+            or 0
+        )
+
+    def _grouped_count(self, statement) -> int:
+        return len(list(self._db.scalars(statement)))
 
     def _unbalanced_journal_count(self, company_id: str) -> int:
         return len(

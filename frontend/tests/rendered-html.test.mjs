@@ -40,12 +40,16 @@ test("keeps the health-agent contract and privacy boundary in the client", async
   ]);
 
   assert.match(page, /HealthAgentApp/);
+  assert.match(api, /\/auth\/login/);
+  assert.match(api, /\/companies\/mine/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/accounting-health\/chat/);
   assert.match(api, /Authorization: `Bearer \$\{token\}`/);
   assert.match(environment, /VITE_API_BASE_URL=http:\/\/localhost:8000\/api\/v1/);
   assert.match(layout, /title: "ContaMind \| Salud contable"/);
   assert.match(layout, /images: \["\/og\.png"\]/);
   assert.match(component, /No incluyas NIT, correos, documentos ni\s+credenciales/);
+  assert.match(component, /No tienes empresas disponibles/);
+  assert.match(component, /Esta empresa está desactivada/);
   assert.doesNotMatch(component, /localStorage|sessionStorage/);
 
   await access(new URL("../public/og.png", import.meta.url));

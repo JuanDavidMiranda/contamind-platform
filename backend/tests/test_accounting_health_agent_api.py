@@ -188,6 +188,7 @@ def test_accounting_health_agent_reports_aggregates_with_company_scope(client):
     finally:
         db.close()
 
+
     no_token = client.post(
         f"/api/v1/companies/{company_id}/agents/accounting-health/chat",
         json={"message": "revisa la salud contable"},

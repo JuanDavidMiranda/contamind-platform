@@ -41,6 +41,7 @@ export function HealthAgentApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const company = availableCompanies.find((item) => item.id === companyId);
+  const canUseAgent = company?.status === "active";
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,15 +67,15 @@ export function HealthAgentApp() {
     setConversationId(null);
     setMessages([]);
     setReport(null);
+    setQuestion("");
     setError(null);
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = question.trim();
-    if (!session || !companyId || !text || busy) return;
+    if (!session || !companyId || !text || busy || !canUseAgent) return;
 
-    setQuestion("");
     setError(null);
     setBusy(true);
     setMessages((current) => [
@@ -86,6 +87,7 @@ export function HealthAgentApp() {
       const answer = await askHealth(session.token, companyId, text, conversationId);
       setConversationId(answer.conversation_id);
       if (answer.report) setReport(answer.report);
+      setQuestion("");
 
       if (answer.conversation) {
         setMessages((current) => [
@@ -181,9 +183,12 @@ export function HealthAgentApp() {
             onChange={(event) => chooseCompany(event.target.value)}
             disabled={availableCompanies.length === 0}
           >
-            {availableCompanies.length === 0 ? <option>Sin empresas disponibles</option> : null}
+            {availableCompanies.length === 0 ? <option value="">Sin empresas disponibles</option> : null}
             {availableCompanies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
+          {availableCompanies.length === 0 ? (
+            <p className="company-empty" role="status">No tienes empresas asignadas todavía.</p>
+          ) : null}
           {company ? (
             <span className={`company-state ${company.status}`}>
               {company.status === "active" ? "Empresa activa" : "Empresa desactivada"}
@@ -228,18 +233,29 @@ export function HealthAgentApp() {
           {messages.length === 0 ? (
             <div className="empty">
               <span className="orb">✦</span>
-              <h2>¿Por dónde quieres empezar?</h2>
+              <h2>
+                {!company
+                  ? "No tienes empresas disponibles."
+                  : canUseAgent
+                    ? "¿Por dónde quieres empezar?"
+                    : "Esta empresa está desactivada."}
+              </h2>
               <p>
-                Revisaré los hallazgos actuales de {company?.name || "la empresa"} y te
-                devolveré la evidencia disponible.
+                {!company
+                  ? "Cuando un administrador te asigne una empresa, podrás consultar su salud contable aquí."
+                  : canUseAgent
+                    ? `Revisaré los hallazgos actuales de ${company.name} y te devolveré la evidencia disponible.`
+                    : "Reactiva la empresa para poder iniciar una consulta de salud contable."}
               </p>
-              <div className="prompts">
-                {prompts.map((prompt) => (
-                  <button key={prompt} type="button" onClick={() => setQuestion(prompt)} disabled={!companyId}>
-                    {prompt}
-                  </button>
-                ))}
-              </div>
+              {canUseAgent ? (
+                <div className="prompts">
+                  {prompts.map((prompt) => (
+                    <button key={prompt} type="button" onClick={() => setQuestion(prompt)}>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : messages.map((item) => (
             <article className={`message ${item.role}`} key={item.id}>
@@ -265,10 +281,10 @@ export function HealthAgentApp() {
             onChange={(event) => setQuestion(event.target.value)}
             maxLength={2000}
             rows={2}
-            disabled={!companyId || busy}
-            placeholder={companyId ? "Pregunta sobre la salud contable…" : "Selecciona una empresa para comenzar"}
+            disabled={!canUseAgent || busy}
+            placeholder={canUseAgent ? "Pregunta sobre la salud contable…" : "Selecciona una empresa activa para comenzar"}
           />
-          <button className="primary" disabled={!question.trim() || !companyId || busy}>
+          <button className="primary" disabled={!question.trim() || !canUseAgent || busy}>
             {busy ? "…" : "Enviar"}
           </button>
         </form>
