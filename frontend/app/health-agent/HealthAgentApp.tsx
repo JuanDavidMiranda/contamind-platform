@@ -2,14 +2,14 @@
 
 import { type FormEvent, useState } from "react";
 
-import { ApiError, askHealth, askReceivables, companies, login } from "./api";
+import { ApiError, askHealth, askPayables, askReceivables, companies, login } from "./api";
 import { ReceivablesOperations } from "./ReceivablesOperations";
 import type { Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
 import "./health-agent.css";
 import "./receivables.css";
 
 type Session = { token: string; userId: number };
-type AgentKey = "accounting-health" | "receivables";
+type AgentKey = "accounting-health" | "receivables" | "payables";
 type ReceivablesView = "diagnostic" | "operations";
 type Message = {
   id: string;
@@ -70,6 +70,18 @@ const agentDetails: Record<AgentKey, {
       ["partially_paid_sales_invoices", "Pago parcial"],
       ["average_days_to_collect", "Promedio de recaudo (días)"],
     ],
+  },
+  payables: {
+    label: "Cuentas por pagar",
+    eyebrow: "AGENTE DE CUENTAS POR PAGAR",
+    title: "Prioriza obligaciones con evidencia.",
+    description: "Analiza facturas de compra y pagos registrados sin modificar tu contabilidad.",
+    emptyTitle: "¿Qué quieres revisar de las obligaciones?",
+    emptyDescription: (companyName) => `Analizaré los saldos de compra disponibles de ${companyName} por moneda, sin exponer datos de proveedores.`,
+    placeholder: "Pregunta sobre obligaciones y vencimientos…",
+    fallback: "No fue posible consultar las cuentas por pagar.",
+    prompts: ["¿Qué obligaciones debo revisar primero?", "¿Qué saldos pendientes hay por moneda?", "¿Cuántas facturas de compra están vencidas?", "¿Cómo se distribuye la antigüedad?"],
+    metrics: [["purchase_invoices", "Facturas de compra"], ["open_purchase_invoices", "Con saldo"], ["overdue_purchase_invoices", "Vencidas"], ["seriously_overdue_purchase_invoices", "Vencidas +90 días"], ["purchase_invoices_missing_due_date", "Sin vencimiento"], ["partially_paid_purchase_invoices", "Pago parcial"], ["average_days_to_pay", "Promedio de pago (días)"]],
   },
 };
 
@@ -148,7 +160,9 @@ export function HealthAgentApp() {
     try {
       const answer = activeAgent === "accounting-health"
         ? await askHealth(session.token, companyId, text, conversationId)
-        : await askReceivables(session.token, companyId, text, conversationId);
+        : activeAgent === "receivables"
+          ? await askReceivables(session.token, companyId, text, conversationId)
+          : await askPayables(session.token, companyId, text, conversationId);
       setConversationId(answer.conversation_id);
       if (answer.report) setReport(answer.report);
       setQuestion("");
@@ -302,10 +316,10 @@ export function HealthAgentApp() {
             <h1>{agent.title}</h1>
           </div>
           <span className="readonly">
-            {activeAgent === "receivables" && receivablesView === "operations" ? "Gestion controlada" : "Solo lectura"}
+            {(activeAgent === "receivables" || activeAgent === "payables") && receivablesView === "operations" ? "Gestión controlada" : "Solo lectura"}
           </span>
         </header>
-        {activeAgent === "receivables" ? (
+        {activeAgent === "receivables" || activeAgent === "payables" ? (
           <div className="receivables-tabs" role="tablist" aria-label="Vistas de cartera">
             <button
               type="button"
@@ -323,17 +337,18 @@ export function HealthAgentApp() {
               className={receivablesView === "operations" ? "active" : undefined}
               onClick={() => setReceivablesView("operations")}
             >
-              Cartera operativa
+              {activeAgent === "receivables" ? "Cartera operativa" : "Pagos operativos"}
             </button>
           </div>
         ) : null}
-        {activeAgent === "receivables" && receivablesView === "operations" ? (
+        {(activeAgent === "receivables" || activeAgent === "payables") && receivablesView === "operations" ? (
           <ReceivablesOperations
             key={`${companyId}-${session.userId}`}
             token={session.token}
             companyId={companyId}
             companyName={company?.name || "esta empresa"}
             enabled={Boolean(canUseAgent)}
+            mode={activeAgent === "payables" ? "payables" : "receivables"}
           />
         ) : (
           <>
@@ -341,7 +356,7 @@ export function HealthAgentApp() {
           <b>Protege los datos personales.</b> No incluyas NIT, correos, documentos ni
           credenciales en la conversación. Este agente es de solo lectura.
         </p>
-        {activeAgent === "receivables" ? (
+        {activeAgent === "receivables" || activeAgent === "payables" ? (
           <p id="receivables-chat-scope" className="scope-hint">
             <b>Qué puedes consultar:</b> saldos, vencimientos y antigüedad, pagos,
             seguimientos, promesas y alertas, siempre de forma agregada. Para revisar el
@@ -351,7 +366,7 @@ export function HealthAgentApp() {
               className="scope-link"
               onClick={() => setReceivablesView("operations")}
             >
-              Cartera operativa
+              {activeAgent === "receivables" ? "Cartera operativa" : "Pagos operativos"}
             </button>
             .
           </p>
@@ -411,7 +426,7 @@ export function HealthAgentApp() {
             maxLength={2000}
             rows={2}
             disabled={!canUseAgent || busy}
-            aria-describedby={activeAgent === "receivables" ? "receivables-chat-scope" : undefined}
+            aria-describedby={activeAgent === "receivables" || activeAgent === "payables" ? "receivables-chat-scope" : undefined}
             placeholder={canUseAgent ? agent.placeholder : "Selecciona una empresa activa para comenzar"}
           />
           <button className="primary" disabled={!question.trim() || !canUseAgent || busy}>

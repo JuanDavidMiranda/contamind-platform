@@ -6,8 +6,10 @@ import {
   ApiError,
   collectionFollowUps,
   createCollectionFollowUp,
+  openPayables,
   openReceivables,
   updateCollectionFollowUp,
+  updatePayableTerms,
   updateInvoiceTerms,
 } from "./api";
 import type {
@@ -22,6 +24,7 @@ type ReceivablesOperationsProps = {
   companyId: string;
   companyName: string;
   enabled: boolean;
+  mode?: "receivables" | "payables";
 };
 
 const PAGE_SIZE = 50;
@@ -39,6 +42,7 @@ export function ReceivablesOperations({
   companyId,
   companyName,
   enabled,
+  mode = "receivables",
 }: ReceivablesOperationsProps) {
   const [items, setItems] = useState<OpenReceivableItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -63,7 +67,7 @@ export function ReceivablesOperations({
     setLoading(true);
     setError(null);
     try {
-      const page = await openReceivables(token, companyId, { limit: PAGE_SIZE, offset: 0 });
+      const page = await (mode === "payables" ? openPayables : openReceivables)(token, companyId, { limit: PAGE_SIZE, offset: 0 });
       setItems(page.items);
       setTotal(page.total);
       setAsOf(page.as_of);
@@ -81,7 +85,7 @@ export function ReceivablesOperations({
     } finally {
       setLoading(false);
     }
-  }, [companyId, enabled, token]);
+  }, [companyId, enabled, mode, token]);
 
   useEffect(() => {
     let disposed = false;
@@ -103,7 +107,7 @@ export function ReceivablesOperations({
     setLoadingMore(true);
     setError(null);
     try {
-      const page = await openReceivables(token, companyId, { limit: PAGE_SIZE, offset: items.length });
+      const page = await (mode === "payables" ? openPayables : openReceivables)(token, companyId, { limit: PAGE_SIZE, offset: items.length });
       setItems((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.invoice_id === item.invoice_id))]);
     } catch (cause) {
       setError(messageFor(cause, "No fue posible cargar más facturas."));
@@ -115,7 +119,7 @@ export function ReceivablesOperations({
   if (!enabled) {
     return (
       <section className="receivables-operations unavailable" aria-labelledby="operations-title">
-        <p className="eyebrow">CARTERA OPERATIVA</p>
+        <p className="eyebrow">{mode === "payables" ? "PAGOS OPERATIVOS" : "CARTERA OPERATIVA"}</p>
         <h2 id="operations-title">La empresa está desactivada.</h2>
         <p>Reactiva {companyName} para consultar y registrar seguimientos de cartera.</p>
       </section>
@@ -127,7 +131,7 @@ export function ReceivablesOperations({
       <header className="operations-heading">
         <div>
           <p className="eyebrow">CARTERA OPERATIVA</p>
-          <h2 id="operations-title">Facturas de venta con saldo</h2>
+          <h2 id="operations-title">Facturas de {mode === "payables" ? "compra" : "venta"} con saldo</h2>
           <p>
             {asOf ? `Corte al ${formatDate(asOf)}.` : "Consulta los saldos pendientes por factura."}
             {total ? ` ${total} en total.` : ""}
@@ -226,6 +230,7 @@ export function ReceivablesOperations({
           token={token}
           companyId={companyId}
           canManage={canManage}
+          mode={mode}
           onChanged={loadFirstPage}
         />
       ) : null}
@@ -238,10 +243,11 @@ type InvoiceDetailProps = {
   token: string;
   companyId: string;
   canManage: boolean;
+  mode: "receivables" | "payables";
   onChanged: () => Promise<void>;
 };
 
-function InvoiceDetail({ item, token, companyId, canManage, onChanged }: InvoiceDetailProps) {
+function InvoiceDetail({ item, token, companyId, canManage, mode, onChanged }: InvoiceDetailProps) {
   const [followUps, setFollowUps] = useState<CollectionFollowUp[]>([]);
   const [loadingFollowUps, setLoadingFollowUps] = useState(true);
   const [followUpError, setFollowUpError] = useState<string | null>(null);
@@ -261,6 +267,7 @@ function InvoiceDetail({ item, token, companyId, canManage, onChanged }: Invoice
   }, [companyId, item.invoice_id, token]);
 
   useEffect(() => {
+    if (mode === "payables") return;
     let disposed = false;
     void Promise.resolve().then(() => {
       if (!disposed) return loadFollowUps();
@@ -268,10 +275,10 @@ function InvoiceDetail({ item, token, companyId, canManage, onChanged }: Invoice
     return () => {
       disposed = true;
     };
-  }, [loadFollowUps]);
+  }, [loadFollowUps, mode]);
 
   async function handleTermsUpdate(payload: InvoiceTermsUpdate) {
-    await updateInvoiceTerms(token, companyId, item.invoice_id, payload);
+    await (mode === "payables" ? updatePayableTerms : updateInvoiceTerms)(token, companyId, item.invoice_id, payload);
     await onChanged();
   }
 
@@ -310,7 +317,7 @@ function InvoiceDetail({ item, token, companyId, canManage, onChanged }: Invoice
         <p className="read-only-notice">Tu rol permite consultar esta cartera, pero no registrar cambios ni seguimientos.</p>
       )}
 
-      <FollowUpPanel
+      {mode === "receivables" ? <FollowUpPanel
         item={item}
         followUps={followUps}
         loading={loadingFollowUps}
@@ -320,7 +327,7 @@ function InvoiceDetail({ item, token, companyId, canManage, onChanged }: Invoice
         companyId={companyId}
         onRetry={loadFollowUps}
         onChanged={handleFollowUpChanged}
-      />
+      /> : null}
     </article>
   );
 }

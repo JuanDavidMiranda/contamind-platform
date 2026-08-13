@@ -1,6 +1,7 @@
 from app.ai.workflows.chat.workflow import ChatWorkflow
 from app.ai.workflows.accounting_health.workflow import AccountingHealthWorkflow
 from app.ai.workflows.receivables.workflow import ReceivablesWorkflow
+from app.ai.workflows.payables.workflow import PayablesWorkflow
 from app.ai.workflows.exogena.workflow import ExogenaWorkflow
 
 
@@ -12,6 +13,7 @@ class WorkflowManager:
             "exogena": ExogenaWorkflow(),
             "accounting_health": AccountingHealthWorkflow(),
             "receivables": ReceivablesWorkflow(),
+            "payables": PayablesWorkflow(),
             "chat": ChatWorkflow(),
         }
 

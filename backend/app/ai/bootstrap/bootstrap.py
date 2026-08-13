@@ -2,6 +2,7 @@ import logging
 
 from app.ai.agents.accounting_health import AccountingHealthAgent
 from app.ai.agents.receivables import ReceivablesAgent
+from app.ai.agents.payables import PayablesAgent
 from app.ai.registry import registry as agent_registry
 from app.ai.tools.registry import registry
 
@@ -19,6 +20,8 @@ def bootstrap() -> None:
     logger.info("agent registered", extra={"agent": "accounting_health"})
     agent_registry.register(ReceivablesAgent())
     logger.info("agent registered", extra={"agent": "receivables"})
+    agent_registry.register(PayablesAgent())
+    logger.info("agent registered", extra={"agent": "payables"})
     if is_enabled(FEATURE_MOCK_EXTERNAL_SERVICES, default=True):
         registry.register(ConsultarObligacionesTool())
         logger.info(

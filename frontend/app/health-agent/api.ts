@@ -45,6 +45,11 @@ export const askReceivables = (token: string, companyId: string, message: string
   { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
   token,
 );
+export const askPayables = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
+  `/companies/${companyId}/agents/payables/chat`,
+  { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
+  token,
+);
 
 export const openReceivables = (
   token: string,
@@ -67,6 +72,19 @@ export const updateInvoiceTerms = (
   `/companies/${companyId}/receivables/invoices/${invoiceId}/terms`,
   { method: "PATCH", body: JSON.stringify(payload) },
   token,
+);
+
+export const openPayables = (token: string, companyId: string, options: { limit?: number; offset?: number } = {}) => {
+  const parameters = new URLSearchParams();
+  if (options.limit !== undefined) parameters.set("limit", String(options.limit));
+  if (options.offset !== undefined) parameters.set("offset", String(options.offset));
+  const query = parameters.size ? `?${parameters.toString()}` : "";
+  return request<OpenReceivablesResponse>(`/companies/${companyId}/payables/open-items${query}`, {}, token);
+};
+
+export const updatePayableTerms = (token: string, companyId: string, invoiceId: string, payload: InvoiceTermsUpdate) => request(
+  `/companies/${companyId}/payables/invoices/${invoiceId}/terms`,
+  { method: "PATCH", body: JSON.stringify(payload) }, token,
 );
 
 export const collectionFollowUps = (token: string, companyId: string, invoiceId: string) => request<CollectionFollowUp[]>(

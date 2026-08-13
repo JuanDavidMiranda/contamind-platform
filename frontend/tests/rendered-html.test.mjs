@@ -46,7 +46,9 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(api, /\/companies\/mine/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/accounting-health\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/receivables\/chat/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/agents\/payables\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/receivables\/open-items/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/payables\/open-items/);
   assert.match(api, /\/companies\/\$\{companyId\}\/collection-followups/);
   assert.match(api, /Authorization: `Bearer \$\{token\}`/);
   assert.match(environment, /VITE_API_BASE_URL=http:\/\/localhost:8000\/api\/v1/);
@@ -56,13 +58,14 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(component, /No tienes empresas disponibles/);
   assert.match(component, /Esta empresa está desactivada/);
   assert.match(component, /AGENTE DE CARTERA/);
+  assert.match(component, /AGENTE DE CUENTAS POR PAGAR/);
   assert.match(component, /ReceivablesOperations/);
   assert.match(component, /Qué puedes consultar:[\s\S]*saldos, vencimientos y antigüedad, pagos/);
   assert.match(component, /seguimientos, promesas y alertas, siempre de forma agregada/);
   assert.match(component, /detalle de una factura, cliente o pago/);
   assert.match(component, /¿Cómo se distribuye la antigüedad de la cartera\?/);
   assert.match(component, /¿Hay pagos parciales, seguimientos o promesas incumplidas\?/);
-  assert.match(component, /aria-describedby=\{activeAgent === "receivables" \? "receivables-chat-scope"/);
+  assert.match(component, /aria-describedby=\{activeAgent === "receivables" \|\| activeAgent === "payables" \? "receivables-chat-scope"/);
   assert.match(component, /fallbackResponseFor/);
   assert.match(component, /serviceNoticeFor/);
   assert.match(component, /conversationDetailText/);

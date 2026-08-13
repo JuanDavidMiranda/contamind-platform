@@ -7,6 +7,7 @@ from app.ai.agents.accounting_health.schemas import (
     AccountingHealthReport,
 )
 from app.ai.agents.receivables.schemas import ReceivablesConversation, ReceivablesReport
+from app.ai.agents.payables.schemas import PayablesConversation, PayablesReport
 
 
 class ChatRequest(BaseModel):
@@ -36,5 +37,5 @@ class CompanyChatResponse(BaseModel):
     conversation_id: UUID
     workflow: str | None = None
     agent_id: str | None = None
-    report: AccountingHealthReport | ReceivablesReport | None = None
-    conversation: AccountingHealthConversation | ReceivablesConversation | None = None
+    report: AccountingHealthReport | ReceivablesReport | PayablesReport | None = None
+    conversation: AccountingHealthConversation | ReceivablesConversation | PayablesConversation | None = None

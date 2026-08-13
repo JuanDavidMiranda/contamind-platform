@@ -183,6 +183,15 @@ La información individual se ofrece por una API operativa separada, nunca por e
 
 Los roles de consulta pueden leer ítems abiertos y seguimientos. Solo `owner`, `admin` y `operator` de una empresa activa pueden modificar términos o crear/editar seguimientos, siempre con confirmación explícita. Los seguimientos conservan actor y marcas de tiempo; sus notas son opcionales, de máximo 280 caracteres y se rechazan si contienen patrones de correo, identificadores numéricos directos o enlaces. Esa validación reduce el riesgo, pero no reemplaza una política DLP ni el criterio del usuario: no escribir datos personales, credenciales, cuentas ni información de contacto.
 
+### Cuentas por pagar (base operativa)
+
+Las facturas canónicas de compra (`purchase`) ya pueden revisarse en una API operativa separada de cartera:
+
+- `GET /api/v1/companies/{company_id}/payables/open-items` lista facturas de compra abiertas, paginadas, con saldo, vencimiento, antigüedad y moneda. Acepta `as_of`, `limit` y `offset`.
+- `PATCH /api/v1/companies/{company_id}/payables/invoices/{invoice_id}/terms` corrige vencimiento o condiciones de pago de una factura de compra únicamente con `confirmed: true`.
+
+La API no mezcla facturas de venta con compras, no suma ni compensa monedas distintas y no reutiliza los seguimientos de cobro, que pertenecen exclusivamente a cartera. Los roles de consulta pueden leer; `owner`, `admin` y `operator` de una empresa activa pueden corregir términos con trazabilidad de actor y fecha. Esta base no programa pagos, no concilia extractos y todavía no incluye un agente conversacional ni una interfaz de cuentas por pagar.
+
 #### Capa LLM opcional y activación productiva
 
 Por defecto `LLM_ENABLED=false`. Cuando se habilita y existe una clave configurada fuera del repositorio, la capa conversacional usa Responses API con `store: false`, identificador de seguridad HMAC, historial local reducido y una proyección agregada del reporte. No envía `company_id`, facturas, clientes, documentos, correos, credenciales ni permisos. La respuesta debe ajustarse a un esquema estructurado, citar códigos de hallazgo existentes y no puede ejecutar acciones. Las entradas y salidas se limitan y redactan por patrones conocidos; no son una garantía DLP.

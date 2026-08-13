@@ -41,7 +41,7 @@ class Orchestrator:
         # de una pregunta que puede contener datos sensibles.
         context.entities = (
             {}
-            if workflow_id in {"accounting_health", "receivables"}
+            if workflow_id in {"accounting_health", "receivables", "payables"}
             else self.extractor.extract(message)
         )
 

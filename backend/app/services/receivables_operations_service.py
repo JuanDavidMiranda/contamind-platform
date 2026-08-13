@@ -61,12 +61,23 @@ class ReceivablesOperationsService:
         as_of: date,
         limit: int,
         offset: int,
+        invoice_type: str = "sale",
+        include_collection_followups: bool = True,
     ) -> OpenReceivablesPage:
         company_key = str(company_id)
-        total = self._open_item_count(company_key)
-        rows = self._open_item_rows(company_key, limit=limit, offset=offset)
+        total = self._open_item_count(company_key, invoice_type=invoice_type)
+        rows = self._open_item_rows(
+            company_key,
+            invoice_type=invoice_type,
+            limit=limit,
+            offset=offset,
+        )
         invoice_ids = [row.id for row in rows]
-        latest_followups = self._latest_followups(company_key, invoice_ids)
+        latest_followups = (
+            self._latest_followups(company_key, invoice_ids)
+            if include_collection_followups
+            else {}
+        )
         mismatches = self._mismatched_payment_counts(company_key, invoice_ids)
 
         items = tuple(
@@ -89,6 +100,8 @@ class ReceivablesOperationsService:
         payment_terms_days: int | None,
         fields_set: set[str],
         actor_user_id: int,
+        invoice_type: str = "sale",
+        invoice_label: str = "Factura de venta",
     ) -> InvoiceRecord:
         """Actualiza el vencimiento como enriquecimiento operativo trazable.
 
@@ -108,11 +121,11 @@ class ReceivablesOperationsService:
             select(InvoiceRecord).where(
                 InvoiceRecord.id == str(invoice_id),
                 InvoiceRecord.company_id == str(company_id),
-                InvoiceRecord.invoice_type == "sale",
+                InvoiceRecord.invoice_type == invoice_type,
             )
         )
         if record is None:
-            raise app_error("NOT_FOUND", message="Factura de venta no encontrada para esta empresa.")
+            raise app_error("NOT_FOUND", message=f"{invoice_label} no encontrada para esta empresa.")
 
         if provided == {"due_date"}:
             if due_date is None:
@@ -157,14 +170,14 @@ class ReceivablesOperationsService:
         self._db.refresh(record)
         return record
 
-    def _open_item_count(self, company_id: str) -> int:
+    def _open_item_count(self, company_id: str, *, invoice_type: str) -> int:
         paid_amount = self._paid_amount()
         statement = (
             select(InvoiceRecord.id)
             .outerjoin(PaymentRecord, self._matching_payment_join())
             .where(
                 InvoiceRecord.company_id == company_id,
-                InvoiceRecord.invoice_type == "sale",
+                InvoiceRecord.invoice_type == invoice_type,
             )
             .group_by(InvoiceRecord.id, InvoiceRecord.total)
             .having(paid_amount < InvoiceRecord.total)
@@ -172,7 +185,14 @@ class ReceivablesOperationsService:
         )
         return int(self._db.scalar(select(func.count()).select_from(statement)) or 0)
 
-    def _open_item_rows(self, company_id: str, *, limit: int, offset: int):
+    def _open_item_rows(
+        self,
+        company_id: str,
+        *,
+        invoice_type: str,
+        limit: int,
+        offset: int,
+    ):
         paid_amount = self._paid_amount()
         overdue_order = case((InvoiceRecord.due_date.is_(None), 1), else_=0)
         return self._db.execute(
@@ -189,7 +209,7 @@ class ReceivablesOperationsService:
             .outerjoin(PaymentRecord, self._matching_payment_join())
             .where(
                 InvoiceRecord.company_id == company_id,
-                InvoiceRecord.invoice_type == "sale",
+                InvoiceRecord.invoice_type == invoice_type,
             )
             .group_by(
                 InvoiceRecord.id,
