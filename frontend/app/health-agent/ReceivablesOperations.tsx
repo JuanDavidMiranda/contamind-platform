@@ -84,7 +84,13 @@ export function ReceivablesOperations({
   }, [companyId, enabled, token]);
 
   useEffect(() => {
-    void loadFirstPage();
+    let disposed = false;
+    void Promise.resolve().then(() => {
+      if (!disposed) return loadFirstPage();
+    });
+    return () => {
+      disposed = true;
+    };
   }, [loadFirstPage]);
 
   const selectedItem = useMemo(
@@ -255,7 +261,13 @@ function InvoiceDetail({ item, token, companyId, canManage, onChanged }: Invoice
   }, [companyId, item.invoice_id, token]);
 
   useEffect(() => {
-    void loadFollowUps();
+    let disposed = false;
+    void Promise.resolve().then(() => {
+      if (!disposed) return loadFollowUps();
+    });
+    return () => {
+      disposed = true;
+    };
   }, [loadFollowUps]);
 
   async function handleTermsUpdate(payload: InvoiceTermsUpdate) {
@@ -289,7 +301,11 @@ function InvoiceDetail({ item, token, companyId, canManage, onChanged }: Invoice
       ) : null}
 
       {canManage ? (
-        <TermsForm item={item} onSave={handleTermsUpdate} />
+        <TermsForm
+          key={`${item.due_date ?? ""}:${item.payment_terms_days ?? ""}`}
+          item={item}
+          onSave={handleTermsUpdate}
+        />
       ) : (
         <p className="read-only-notice">Tu rol permite consultar esta cartera, pero no registrar cambios ni seguimientos.</p>
       )}
@@ -316,11 +332,6 @@ function TermsForm({ item, onSave }: { item: OpenReceivableItem; onSave: (payloa
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDueDate(item.due_date || "");
-    setTermsDays(item.payment_terms_days?.toString() || "");
-  }, [item.due_date, item.payment_terms_days]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
