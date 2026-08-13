@@ -7,7 +7,24 @@ export type ReceivablesAgingBucket = {
   invoices: number;
   outstanding_balances: ReceivablesBalance[];
 };
-export type ReportMetricValue = number | string | null | ReceivablesBalance[] | ReceivablesAgingBucket[];
+export type CashFlowAmount = { currency_code: string; amount: string };
+export type CashFlowPeriod = {
+  key: string;
+  start_date: string | null;
+  end_date: string | null;
+  receivable_invoices: number;
+  payable_invoices: number;
+  projected_inflows: CashFlowAmount[];
+  projected_outflows: CashFlowAmount[];
+  net_movements: CashFlowAmount[];
+};
+export type ReportMetricValue =
+  | number
+  | string
+  | null
+  | ReceivablesBalance[]
+  | ReceivablesAgingBucket[]
+  | CashFlowPeriod[];
 export type Report = {
   company_id: string;
   generated_at: string;
@@ -16,6 +33,10 @@ export type Report = {
   metrics: Record<string, ReportMetricValue> & {
     outstanding_balances?: ReceivablesBalance[];
     aging_buckets?: ReceivablesAgingBucket[];
+    projected_inflows_90d?: CashFlowAmount[];
+    projected_outflows_90d?: CashFlowAmount[];
+    net_movements_90d?: CashFlowAmount[];
+    cash_flow_periods?: CashFlowPeriod[];
   };
   findings: Finding[];
 };

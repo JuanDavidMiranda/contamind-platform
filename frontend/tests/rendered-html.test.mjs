@@ -31,13 +31,14 @@ test("server-renders the ContaMind sign-in experience", async () => {
 });
 
 test("keeps the accounting-agent contracts and privacy boundary in the client", async () => {
-  const [page, api, layout, component, operations, styles, environment] = await Promise.all([
+  const [page, api, layout, component, operations, styles, cashFlowStyles, environment] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/api.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/HealthAgentApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/ReceivablesOperations.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/health-agent.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/health-agent/cash-flow.css", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
   ]);
 
@@ -47,6 +48,7 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/accounting-health\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/receivables\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/payables\/chat/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/agents\/cash-flow\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/receivables\/open-items/);
   assert.match(api, /\/companies\/\$\{companyId\}\/payables\/open-items/);
   assert.match(api, /\/companies\/\$\{companyId\}\/collection-followups/);
@@ -59,13 +61,17 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(component, /Esta empresa está desactivada/);
   assert.match(component, /AGENTE DE CARTERA/);
   assert.match(component, /AGENTE DE CUENTAS POR PAGAR/);
+  assert.match(component, /AGENTE DE FLUJO DE CAJA/);
   assert.match(component, /ReceivablesOperations/);
   assert.match(component, /Qué puedes consultar:[\s\S]*saldos, vencimientos y antigüedad, pagos/);
   assert.match(component, /seguimientos, promesas y alertas, siempre de forma agregada/);
   assert.match(component, /detalle de una factura, cliente o pago/);
   assert.match(component, /¿Cómo se distribuye la antigüedad de la cartera\?/);
   assert.match(component, /¿Hay pagos parciales, seguimientos o promesas incumplidas\?/);
-  assert.match(component, /aria-describedby=\{activeAgent === "receivables" \|\| activeAgent === "payables" \? "receivables-chat-scope"/);
+  assert.match(component, /cash-flow-chat-scope/);
+  assert.match(component, /Movimiento neto a 90 días/);
+  assert.match(component, /No representa saldo bancario disponible/);
+  assert.match(component, /Entradas: \{unsignedAmountsText/);
   assert.match(component, /fallbackResponseFor/);
   assert.match(component, /serviceNoticeFor/);
   assert.match(component, /conversationDetailText/);
@@ -74,6 +80,7 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(styles, /\.service-notice/);
   assert.match(styles, /\.scope-hint/);
   assert.match(styles, /\.scope-link:focus-visible/);
+  assert.match(cashFlowStyles, /\.cash-flow-periods/);
   assert.match(operations, /canManage/);
   assert.match(operations, /confirmed: true/);
   assert.match(operations, /No incluyas datos personales/);

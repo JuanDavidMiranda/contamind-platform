@@ -57,7 +57,12 @@ class ChatService:
                 forced_workflow=workflow_id,
             )
         finally:
-            if context.workflow in {"accounting_health", "receivables", "payables"}:
+            if context.workflow in {
+                "accounting_health",
+                "receivables",
+                "payables",
+                "cash_flow",
+            }:
                 # El agente conserva solo el historial ya sanitizado; no dejamos
                 # la pregunta ni entidades extraídas en la sesión temporal.
                 context.user_message = ""

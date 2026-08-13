@@ -2,14 +2,15 @@
 
 import { type FormEvent, useState } from "react";
 
-import { ApiError, askHealth, askPayables, askReceivables, companies, login } from "./api";
+import { ApiError, askCashFlow, askHealth, askPayables, askReceivables, companies, login } from "./api";
 import { ReceivablesOperations } from "./ReceivablesOperations";
-import type { Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
+import type { CashFlowAmount, Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
 import "./health-agent.css";
 import "./receivables.css";
+import "./cash-flow.css";
 
 type Session = { token: string; userId: number };
-type AgentKey = "accounting-health" | "receivables" | "payables";
+type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow";
 type ReceivablesView = "diagnostic" | "operations";
 type Message = {
   id: string;
@@ -82,6 +83,32 @@ const agentDetails: Record<AgentKey, {
     fallback: "No fue posible consultar las cuentas por pagar.",
     prompts: ["¿Qué obligaciones debo revisar primero?", "¿Qué saldos pendientes hay por moneda?", "¿Cuántas facturas de compra están vencidas?", "¿Cómo se distribuye la antigüedad?"],
     metrics: [["purchase_invoices", "Facturas de compra"], ["open_purchase_invoices", "Con saldo"], ["overdue_purchase_invoices", "Vencidas"], ["seriously_overdue_purchase_invoices", "Vencidas +90 días"], ["purchase_invoices_missing_due_date", "Sin vencimiento"], ["partially_paid_purchase_invoices", "Pago parcial"], ["average_days_to_pay", "Promedio de pago (días)"]],
+  },
+  "cash-flow": {
+    label: "Flujo de caja",
+    eyebrow: "AGENTE DE FLUJO DE CAJA",
+    title: "Anticipa movimientos antes de que venzan.",
+    description: "Combina cartera y cuentas por pagar para proyectar entradas y salidas abiertas, siempre separadas por moneda.",
+    emptyTitle: "¿Qué quieres revisar del flujo de caja?",
+    emptyDescription: (companyName) => "Proyectaré los vencimientos abiertos de " + companyName + " sin asumir recaudos, pagos ni saldos bancarios.",
+    placeholder: "Pregunta sobre entradas, salidas y vencimientos…",
+    fallback: "No fue posible generar la proyección de flujo de caja.",
+    prompts: [
+      "¿Qué movimientos debo revisar primero?",
+      "¿Qué entradas y salidas hay en los próximos 30 días?",
+      "¿Cuál es el movimiento neto proyectado por moneda?",
+      "¿Qué datos faltan para completar la proyección?",
+    ],
+    metrics: [
+      ["open_receivables", "Cuentas por cobrar"],
+      ["open_payables", "Cuentas por pagar"],
+      ["scheduled_receivables", "Entradas con fecha"],
+      ["scheduled_payables", "Salidas con fecha"],
+      ["receivables_missing_due_date", "Cobros sin fecha"],
+      ["payables_missing_due_date", "Pagos sin fecha"],
+      ["currencies", "Monedas"],
+      ["horizon_days", "Horizonte (días)"],
+    ],
   },
 };
 
@@ -162,7 +189,9 @@ export function HealthAgentApp() {
         ? await askHealth(session.token, companyId, text, conversationId)
         : activeAgent === "receivables"
           ? await askReceivables(session.token, companyId, text, conversationId)
-          : await askPayables(session.token, companyId, text, conversationId);
+          : activeAgent === "payables"
+            ? await askPayables(session.token, companyId, text, conversationId)
+            : await askCashFlow(session.token, companyId, text, conversationId);
       setConversationId(answer.conversation_id);
       if (answer.report) setReport(answer.report);
       setQuestion("");
@@ -371,6 +400,13 @@ export function HealthAgentApp() {
             .
           </p>
         ) : null}
+        {activeAgent === "cash-flow" ? (
+          <p id="cash-flow-chat-scope" className="scope-hint">
+            <b>Qué puedes consultar:</b> entradas, salidas, movimiento neto y
+            vencimientos por período y moneda. La proyección no incluye saldos
+            bancarios ni garantiza que un cobro o pago vaya a ocurrir.
+          </p>
+        ) : null}
         {serviceNotice ? <p className="service-notice" role="status">{serviceNotice}</p> : null}
 
         <div className="messages" aria-live="polite">
@@ -426,7 +462,13 @@ export function HealthAgentApp() {
             maxLength={2000}
             rows={2}
             disabled={!canUseAgent || busy}
-            aria-describedby={activeAgent === "receivables" || activeAgent === "payables" ? "receivables-chat-scope" : undefined}
+            aria-describedby={
+              activeAgent === "receivables" || activeAgent === "payables"
+                ? "receivables-chat-scope"
+                : activeAgent === "cash-flow"
+                  ? "cash-flow-chat-scope"
+                  : undefined
+            }
             placeholder={canUseAgent ? agent.placeholder : "Selecciona una empresa activa para comenzar"}
           />
           <button className="primary" disabled={!question.trim() || !canUseAgent || busy}>
@@ -477,6 +519,47 @@ export function HealthAgentApp() {
                 </dl>
               </section>
             ) : null}
+            {activeAgent === "cash-flow" && report.metrics.net_movements_90d?.length ? (
+              <section className="card balances cash-flow-net">
+                <h2>Movimiento neto a 90 días</h2>
+                <dl>
+                  {report.metrics.net_movements_90d.map((amount) => (
+                    <div key={amount.currency_code}>
+                      <dt>{amount.currency_code}</dt>
+                      <dd className={Number(amount.amount) < 0 ? "negative" : "positive"}>
+                        {formatSignedMoney(amount)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <small>No representa saldo bancario disponible.</small>
+              </section>
+            ) : null}
+            {activeAgent === "cash-flow" && report.metrics.cash_flow_periods?.length ? (
+              <section className="card cash-flow-periods">
+                <h2>Movimientos por período</h2>
+                <ol>
+                  {report.metrics.cash_flow_periods.map((period) => (
+                    <li key={period.key}>
+                      <div>
+                        <strong>{cashFlowPeriodLabel(period.key)}</strong>
+                        <small>
+                          {period.receivable_invoices} entrada{period.receivable_invoices === 1 ? "" : "s"}
+                          {" · "}
+                          {period.payable_invoices} salida{period.payable_invoices === 1 ? "" : "s"}
+                        </small>
+                      </div>
+                      <span>{amountsText(period.net_movements)}</span>
+                      <small className="cash-flow-breakdown">
+                        Entradas: {unsignedAmountsText(period.projected_inflows)}
+                        {" · "}
+                        Salidas: {unsignedAmountsText(period.projected_outflows)}
+                      </small>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
             <section className="card findings">
               <h2>Hallazgos <span>{report.summary.finding_count}</span></h2>
               {report.findings.length ? (
@@ -517,6 +600,36 @@ function formatMoney(amount: string, currency: string) {
     currency,
     maximumFractionDigits: 2,
   }).format(Number(amount));
+}
+
+function formatSignedMoney(amount: CashFlowAmount) {
+  const value = Number(amount.amount);
+  const formatted = formatMoney(String(Math.abs(value)), amount.currency_code);
+  return value > 0 ? "+" + formatted : value < 0 ? "−" + formatted : formatted;
+}
+
+function amountsText(amounts: CashFlowAmount[]) {
+  if (!amounts.length) return "Sin movimiento";
+  return amounts.map(formatSignedMoney).join(" · ");
+}
+
+function unsignedAmountsText(amounts: CashFlowAmount[]) {
+  if (!amounts.length) return "Sin movimiento";
+  return amounts
+    .map((amount) => formatMoney(amount.amount, amount.currency_code))
+    .join(" · ");
+}
+
+function cashFlowPeriodLabel(key: string) {
+  return {
+    overdue: "Vencidos",
+    due_today: "Vence hoy",
+    next_7_days: "Próximos 7 días",
+    days_8_30: "Días 8 a 30",
+    days_31_60: "Días 31 a 60",
+    days_61_90: "Días 61 a 90",
+    beyond_90: "Después de 90 días",
+  }[key] || key;
 }
 
 function metricText(value: ReportMetricValue | undefined) {

@@ -183,14 +183,24 @@ La información individual se ofrece por una API operativa separada, nunca por e
 
 Los roles de consulta pueden leer ítems abiertos y seguimientos. Solo `owner`, `admin` y `operator` de una empresa activa pueden modificar términos o crear/editar seguimientos, siempre con confirmación explícita. Los seguimientos conservan actor y marcas de tiempo; sus notas son opcionales, de máximo 280 caracteres y se rechazan si contienen patrones de correo, identificadores numéricos directos o enlaces. Esa validación reduce el riesgo, pero no reemplaza una política DLP ni el criterio del usuario: no escribir datos personales, credenciales, cuentas ni información de contacto.
 
-### Cuentas por pagar (base operativa)
+### Agente y operación de cuentas por pagar
 
 Las facturas canónicas de compra (`purchase`) ya pueden revisarse en una API operativa separada de cartera:
 
 - `GET /api/v1/companies/{company_id}/payables/open-items` lista facturas de compra abiertas, paginadas, con saldo, vencimiento, antigüedad y moneda. Acepta `as_of`, `limit` y `offset`.
 - `PATCH /api/v1/companies/{company_id}/payables/invoices/{invoice_id}/terms` corrige vencimiento o condiciones de pago de una factura de compra únicamente con `confirmed: true`.
 
-La API no mezcla facturas de venta con compras, no suma ni compensa monedas distintas y no reutiliza los seguimientos de cobro, que pertenecen exclusivamente a cartera. Los roles de consulta pueden leer; `owner`, `admin` y `operator` de una empresa activa pueden corregir términos con trazabilidad de actor y fecha. Esta base no programa pagos, no concilia extractos y todavía no incluye un agente conversacional ni una interfaz de cuentas por pagar.
+La API no mezcla facturas de venta con compras, no suma ni compensa monedas distintas y no reutiliza los seguimientos de cobro, que pertenecen exclusivamente a cartera. Los roles de consulta pueden leer; `owner`, `admin` y `operator` de una empresa activa pueden corregir términos con trazabilidad de actor y fecha. El diagnóstico agregado está disponible en `POST /api/v1/companies/{company_id}/agents/payables/chat` y en la interfaz **Cuentas por pagar**. No programa pagos ni concilia extractos.
+
+### Agente de flujo de caja
+
+`POST /api/v1/companies/{company_id}/agents/cash-flow/chat` proyecta en modo determinista y de solo lectura los movimientos de facturas abiertas de venta y compra. Resta únicamente pagos ya registrados en la misma moneda de la factura y conserva COP, USD u otras monedas completamente separadas; no aplica tasas ni compensa divisas.
+
+La proyección clasifica los saldos por fecha de vencimiento en vencidos, hoy, próximos 7 días, días 8–30, 31–60, 61–90 y después de 90 días. El resumen a 90 días incluye los movimientos vencidos todavía abiertos. Las facturas sin vencimiento se cuentan y generan una advertencia, pero no se ubican artificialmente en el calendario. La interfaz muestra entradas, salidas y movimiento neto por período y moneda.
+
+El endpoint exige una membresía de consulta (`owner`, `admin`, `operator` o `viewer`) y no devuelve facturas, clientes, proveedores, documentos o pagos individuales. Tampoco registra cobros, programa pagos ni realiza transferencias. Cada consulta deja sólo metadatos agregados en `agent_executions`; el mensaje y el reporte no se guardan allí.
+
+Esta proyección **no es un saldo bancario ni una medición de liquidez real**: no recibe cuentas ni extractos, y un vencimiento no garantiza que el cobro o pago ocurra en esa fecha. Antes de decidir pagos o necesidades de financiación se deben confirmar disponibilidad bancaria, certeza de recaudo y obligaciones fuera del modelo. Ver `backend/docs/adr/0020-agente-de-flujo-de-caja.md`.
 
 #### Capa LLM opcional y activación productiva
 

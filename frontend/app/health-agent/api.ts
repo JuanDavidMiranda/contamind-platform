@@ -50,6 +50,11 @@ export const askPayables = (token: string, companyId: string, message: string, c
   { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
   token,
 );
+export const askCashFlow = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
+  `/companies/${companyId}/agents/cash-flow/chat`,
+  { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
+  token,
+);
 
 export const openReceivables = (
   token: string,
