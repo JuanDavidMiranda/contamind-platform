@@ -102,3 +102,58 @@ export type CollectionFollowUpUpdate = {
   note?: string | null;
   confirmed: true;
 };
+
+export type BankAccount = {
+  id: string;
+  name: string;
+  bank_name: string | null;
+  currency_code: string;
+  status: "active" | "disabled";
+  created_by_user_id: number;
+  created_at: string;
+};
+
+export type BankAccountsResponse = {
+  can_manage: boolean;
+  can_configure: boolean;
+  accounts: BankAccount[];
+};
+
+export type BankTransactionStatus =
+  | "pending"
+  | "suggested"
+  | "reconciled"
+  | "dismissed"
+  | "excluded";
+
+export type BankTransaction = {
+  id: string;
+  bank_account_id: string;
+  transaction_date: string;
+  amount: string;
+  currency_code: string;
+  description: string | null;
+  reference: string | null;
+  status: BankTransactionStatus;
+  match_candidate_count: number;
+  suggested_payment_id: string | null;
+  suggested_payment_date: string | null;
+  matched_payment_id: string | null;
+  reviewed_by_user_id: number | null;
+  reviewed_at: string | null;
+};
+
+export type BankTransactionsResponse = {
+  total: number;
+  can_manage: boolean;
+  items: BankTransaction[];
+};
+
+export type BankImportResult = {
+  import_id: string;
+  accepted_rows: number;
+  duplicate_rows: number;
+  rejections: Array<{ row_number: number; message: string }>;
+};
+
+export type BankReviewAction = "confirm" | "dismiss" | "exclude" | "reopen";

@@ -1,0 +1,4 @@
+fecha,valor,descripcion,referencia,moneda
+2026-08-08,-300000,Pago de compra registrado,DEMO-BANCO-001,COP
+2026-08-12,-150000,Cargo bancario pendiente de clasificar,DEMO-BANCO-002,COP
+2026-08-13,500000,Entrada sin pago contable asociado,DEMO-BANCO-003,COP

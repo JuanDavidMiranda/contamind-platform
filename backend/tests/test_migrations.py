@@ -77,6 +77,9 @@ def test_migrations_apply_on_empty_database():
                     "provider_sync_runs",
                     "provider_sync_jobs",
                     "agent_executions",
+                    "bank_accounts",
+                    "bank_statement_imports",
+                    "bank_transactions",
                 } <= tables
                 version = connection.execute(
                     text("SELECT version_num FROM alembic_version")

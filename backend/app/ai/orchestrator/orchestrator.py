@@ -46,6 +46,7 @@ class Orchestrator:
                 "receivables",
                 "payables",
                 "cash_flow",
+                "bank_reconciliation",
             }
             else self.extractor.extract(message)
         )

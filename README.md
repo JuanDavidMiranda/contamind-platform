@@ -202,7 +202,25 @@ El endpoint exige una membresía de consulta (`owner`, `admin`, `operator` o `vi
 
 Esta proyección **no es un saldo bancario ni una medición de liquidez real**: no recibe cuentas ni extractos, y un vencimiento no garantiza que el cobro o pago ocurra en esa fecha. Antes de decidir pagos o necesidades de financiación se deben confirmar disponibilidad bancaria, certeza de recaudo y obligaciones fuera del modelo. Ver `backend/docs/adr/0020-agente-de-flujo-de-caja.md`.
 
+### Agente y operación de conciliación bancaria
+
+`POST /api/v1/companies/{company_id}/agents/bank-reconciliation/chat` explica únicamente métricas agregadas de conciliación: movimientos importados, sugerencias por confirmar, pendientes, ambigüedades, cobertura y entradas o salidas separadas por moneda. No devuelve descripciones, referencias, pagos ni cuentas individuales y no confirma decisiones desde el chat.
+
+La vista **Conciliación operativa** ofrece el flujo autorizado:
+
+- `GET|POST /api/v1/companies/{company_id}/bank-reconciliation/accounts` lista o crea alias de cuenta. La aplicación no solicita ni guarda el número completo; los alias rechazan correos y secuencias numéricas largas. Sólo `owner` y `admin` pueden crearlos.
+- `POST /api/v1/companies/{company_id}/bank-reconciliation/accounts/{bank_account_id}/imports` importa extractos CSV UTF-8. Las columnas obligatorias son `fecha`/`date` y `valor`/`amount`; descripción, referencia y moneda son opcionales. Los valores positivos representan entradas y los negativos salidas. La moneda de cada fila debe coincidir con la del alias.
+- `GET /api/v1/companies/{company_id}/bank-reconciliation/transactions` lista movimientos para revisión operativa. `PATCH /api/v1/companies/{company_id}/bank-reconciliation/transactions/{transaction_id}` permite confirmar, descartar, excluir o reabrir con `confirmed: true`. `owner`, `admin` y `operator` pueden importar y revisar; `viewer` sólo consulta.
+
+El motor sugiere una coincidencia sólo cuando encuentra **un único** pago contable de igual importe absoluto y moneda, con dirección coherente —entrada para factura de venta, salida para compra— y fecha dentro de tres días antes o después. Una sugerencia nunca se considera conciliada hasta la confirmación humana; una coincidencia ambigua permanece pendiente y un pago no puede conciliarse dos veces. La huella de cada fila evita duplicados al reimportar el mismo extracto.
+
+Esta primera versión admite CSV normalizado y coincidencias uno a uno. No calcula saldos bancarios, no conecta cuentas en línea, no divide ni agrupa movimientos, no crea pagos o comprobantes y no resuelve diferencias cambiarias. Las descripciones y referencias permanecen en la vista operativa y no llegan al agente. Ver `backend/docs/adr/0021-agente-de-conciliacion-bancaria.md`.
+
+Para la revisión local con `contamind-demo.db`, puede cargarse `backend/examples/extracto-bancario-demo.csv`: contiene datos ficticios, una salida que coincide con el pago de compra de demostración y dos movimientos deliberadamente pendientes.
+
 #### Capa LLM opcional y activación productiva
+
+Esta capa aplica a los agentes que la integran explícitamente. Las versiones actuales de cuentas por pagar, flujo de caja y conciliación bancaria son deterministas y no llaman al LLM.
 
 Por defecto `LLM_ENABLED=false`. Cuando se habilita y existe una clave configurada fuera del repositorio, la capa conversacional usa Responses API con `store: false`, identificador de seguridad HMAC, historial local reducido y una proyección agregada del reporte. No envía `company_id`, facturas, clientes, documentos, correos, credenciales ni permisos. La respuesta debe ajustarse a un esquema estructurado, citar códigos de hallazgo existentes y no puede ejecutar acciones. Las entradas y salidas se limitan y redactan por patrones conocidos; no son una garantía DLP.
 

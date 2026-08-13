@@ -1,5 +1,6 @@
 from app.ai.workflows.chat.workflow import ChatWorkflow
 from app.ai.workflows.accounting_health.workflow import AccountingHealthWorkflow
+from app.ai.workflows.bank_reconciliation.workflow import BankReconciliationWorkflow
 from app.ai.workflows.cash_flow.workflow import CashFlowWorkflow
 from app.ai.workflows.receivables.workflow import ReceivablesWorkflow
 from app.ai.workflows.payables.workflow import PayablesWorkflow
@@ -16,6 +17,7 @@ class WorkflowManager:
             "receivables": ReceivablesWorkflow(),
             "payables": PayablesWorkflow(),
             "cash_flow": CashFlowWorkflow(),
+            "bank_reconciliation": BankReconciliationWorkflow(),
             "chat": ChatWorkflow(),
         }
 

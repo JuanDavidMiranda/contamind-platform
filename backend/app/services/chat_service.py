@@ -62,6 +62,7 @@ class ChatService:
                 "receivables",
                 "payables",
                 "cash_flow",
+                "bank_reconciliation",
             }:
                 # El agente conserva solo el historial ya sanitizado; no dejamos
                 # la pregunta ni entidades extraídas en la sesión temporal.

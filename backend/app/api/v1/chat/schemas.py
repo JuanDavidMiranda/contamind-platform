@@ -7,6 +7,10 @@ from app.ai.agents.accounting_health.schemas import (
     AccountingHealthReport,
 )
 from app.ai.agents.cash_flow.schemas import CashFlowConversation, CashFlowReport
+from app.ai.agents.bank_reconciliation.schemas import (
+    BankReconciliationConversation,
+    BankReconciliationReport,
+)
 from app.ai.agents.receivables.schemas import ReceivablesConversation, ReceivablesReport
 from app.ai.agents.payables.schemas import PayablesConversation, PayablesReport
 
@@ -43,6 +47,7 @@ class CompanyChatResponse(BaseModel):
         | ReceivablesReport
         | PayablesReport
         | CashFlowReport
+        | BankReconciliationReport
         | None
     ) = None
     conversation: (
@@ -50,5 +55,6 @@ class CompanyChatResponse(BaseModel):
         | ReceivablesConversation
         | PayablesConversation
         | CashFlowConversation
+        | BankReconciliationConversation
         | None
     ) = None

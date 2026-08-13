@@ -2,16 +2,18 @@
 
 import { type FormEvent, useState } from "react";
 
-import { ApiError, askCashFlow, askHealth, askPayables, askReceivables, companies, login } from "./api";
+import { ApiError, askBankReconciliation, askCashFlow, askHealth, askPayables, askReceivables, companies, login } from "./api";
+import { BankReconciliationOperations } from "./BankReconciliationOperations";
 import { ReceivablesOperations } from "./ReceivablesOperations";
 import type { CashFlowAmount, Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
 import "./health-agent.css";
 import "./receivables.css";
 import "./cash-flow.css";
+import "./bank-reconciliation.css";
 
 type Session = { token: string; userId: number };
-type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow";
-type ReceivablesView = "diagnostic" | "operations";
+type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "bank-reconciliation";
+type AgentView = "diagnostic" | "operations";
 type Message = {
   id: string;
   role: "user" | "assistant";
@@ -110,6 +112,32 @@ const agentDetails: Record<AgentKey, {
       ["horizon_days", "Horizonte (días)"],
     ],
   },
+  "bank-reconciliation": {
+    label: "Conciliación bancaria",
+    eyebrow: "AGENTE DE CONCILIACIÓN BANCARIA",
+    title: "Contrasta el banco con tu contabilidad.",
+    description: "Importa extractos, revisa coincidencias exactas y mantiene cada confirmación bajo control humano.",
+    emptyTitle: "¿Qué quieres revisar de la conciliación?",
+    emptyDescription: (companyName) => `Analizaré la cobertura agregada de ${companyName} sin mostrar movimientos ni referencias individuales en el chat.`,
+    placeholder: "Pregunta sobre cobertura y diferencias bancarias…",
+    fallback: "No fue posible consultar la conciliación bancaria.",
+    prompts: [
+      "¿Qué debo revisar primero en la conciliación?",
+      "¿Cuántos movimientos siguen sin conciliar?",
+      "¿Cuál es la cobertura de conciliación?",
+      "¿Qué entradas y salidas fueron importadas por moneda?",
+    ],
+    metrics: [
+      ["bank_accounts", "Cuentas"],
+      ["statement_imports", "Extractos cargados"],
+      ["imported_transactions", "Movimientos"],
+      ["reconciled_transactions", "Conciliados"],
+      ["suggested_matches", "Sugeridos"],
+      ["unmatched_transactions", "Sin coincidencia"],
+      ["ambiguous_transactions", "Ambiguos"],
+      ["reconciliation_rate", "Cobertura (%)"],
+    ],
+  },
 };
 
 export function HealthAgentApp() {
@@ -117,7 +145,7 @@ export function HealthAgentApp() {
   const [availableCompanies, setAvailableCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState("");
   const [activeAgent, setActiveAgent] = useState<AgentKey>("accounting-health");
-  const [receivablesView, setReceivablesView] = useState<ReceivablesView>("diagnostic");
+  const [agentView, setAgentView] = useState<AgentView>("diagnostic");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [report, setReport] = useState<Report | null>(null);
@@ -163,7 +191,7 @@ export function HealthAgentApp() {
 
   function chooseAgent(nextAgent: AgentKey) {
     setActiveAgent(nextAgent);
-    setReceivablesView("diagnostic");
+    setAgentView("diagnostic");
     setConversationId(null);
     setMessages([]);
     setReport(null);
@@ -191,14 +219,17 @@ export function HealthAgentApp() {
           ? await askReceivables(session.token, companyId, text, conversationId)
           : activeAgent === "payables"
             ? await askPayables(session.token, companyId, text, conversationId)
-            : await askCashFlow(session.token, companyId, text, conversationId);
+            : activeAgent === "cash-flow"
+              ? await askCashFlow(session.token, companyId, text, conversationId)
+              : await askBankReconciliation(session.token, companyId, text, conversationId);
       setConversationId(answer.conversation_id);
       if (answer.report) setReport(answer.report);
       setQuestion("");
       setServiceNotice(null);
 
       if (answer.conversation) {
-        const usingFallback = answer.conversation.outcome === "temporarily_unavailable";
+        const conversation = answer.conversation;
+        const usingFallback = conversation.outcome === "temporarily_unavailable";
         setServiceNotice(usingFallback ? serviceNoticeFor(activeAgent) : null);
         setMessages((current) => [
           ...current,
@@ -206,10 +237,10 @@ export function HealthAgentApp() {
             id: `a-${Date.now()}`,
             role: "assistant",
             content: usingFallback
-              ? fallbackResponseFor(activeAgent, answer.report, answer.conversation.response)
-              : answer.conversation.response,
-            outcome: answer.conversation.outcome,
-            llmUsed: answer.conversation.llm_used,
+              ? fallbackResponseFor(activeAgent, answer.report, conversation.response)
+              : conversation.response,
+            outcome: conversation.outcome,
+            llmUsed: conversation.llm_used,
           },
         ]);
       }
@@ -345,40 +376,54 @@ export function HealthAgentApp() {
             <h1>{agent.title}</h1>
           </div>
           <span className="readonly">
-            {(activeAgent === "receivables" || activeAgent === "payables") && receivablesView === "operations" ? "Gestión controlada" : "Solo lectura"}
+            {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "bank-reconciliation") && agentView === "operations" ? "Gestión controlada" : "Solo lectura"}
           </span>
         </header>
-        {activeAgent === "receivables" || activeAgent === "payables" ? (
-          <div className="receivables-tabs" role="tablist" aria-label="Vistas de cartera">
+        {activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "bank-reconciliation" ? (
+          <div className="receivables-tabs" role="tablist" aria-label="Vistas del agente">
             <button
               type="button"
               role="tab"
-              aria-selected={receivablesView === "diagnostic"}
-              className={receivablesView === "diagnostic" ? "active" : undefined}
-              onClick={() => setReceivablesView("diagnostic")}
+              aria-selected={agentView === "diagnostic"}
+              className={agentView === "diagnostic" ? "active" : undefined}
+              onClick={() => setAgentView("diagnostic")}
             >
               Diagnostico
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={receivablesView === "operations"}
-              className={receivablesView === "operations" ? "active" : undefined}
-              onClick={() => setReceivablesView("operations")}
+              aria-selected={agentView === "operations"}
+              className={agentView === "operations" ? "active" : undefined}
+              onClick={() => setAgentView("operations")}
             >
-              {activeAgent === "receivables" ? "Cartera operativa" : "Pagos operativos"}
+              {activeAgent === "receivables"
+                ? "Cartera operativa"
+                : activeAgent === "payables"
+                  ? "Pagos operativos"
+                  : "Conciliación operativa"}
             </button>
           </div>
         ) : null}
-        {(activeAgent === "receivables" || activeAgent === "payables") && receivablesView === "operations" ? (
-          <ReceivablesOperations
-            key={`${companyId}-${session.userId}`}
-            token={session.token}
-            companyId={companyId}
-            companyName={company?.name || "esta empresa"}
-            enabled={Boolean(canUseAgent)}
-            mode={activeAgent === "payables" ? "payables" : "receivables"}
-          />
+        {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "bank-reconciliation") && agentView === "operations" ? (
+          activeAgent === "bank-reconciliation" ? (
+            <BankReconciliationOperations
+              key={`${companyId}-${session.userId}-bank`}
+              token={session.token}
+              companyId={companyId}
+              companyName={company?.name || "esta empresa"}
+              enabled={Boolean(canUseAgent)}
+            />
+          ) : (
+            <ReceivablesOperations
+              key={`${companyId}-${session.userId}`}
+              token={session.token}
+              companyId={companyId}
+              companyName={company?.name || "esta empresa"}
+              enabled={Boolean(canUseAgent)}
+              mode={activeAgent === "payables" ? "payables" : "receivables"}
+            />
+          )
         ) : (
           <>
         <p className="privacy">
@@ -393,7 +438,7 @@ export function HealthAgentApp() {
             <button
               type="button"
               className="scope-link"
-              onClick={() => setReceivablesView("operations")}
+              onClick={() => setAgentView("operations")}
             >
               {activeAgent === "receivables" ? "Cartera operativa" : "Pagos operativos"}
             </button>
@@ -405,6 +450,15 @@ export function HealthAgentApp() {
             <b>Qué puedes consultar:</b> entradas, salidas, movimiento neto y
             vencimientos por período y moneda. La proyección no incluye saldos
             bancarios ni garantiza que un cobro o pago vaya a ocurrir.
+          </p>
+        ) : null}
+        {activeAgent === "bank-reconciliation" ? (
+          <p id="bank-reconciliation-chat-scope" className="scope-hint">
+            <b>Qué puedes consultar:</b> cobertura, pendientes, coincidencias y entradas
+            o salidas agregadas. Para cargar extractos o confirmar una coincidencia, usa{" "}
+            <button type="button" className="scope-link" onClick={() => setAgentView("operations")}>
+              Conciliación operativa
+            </button>.
           </p>
         ) : null}
         {serviceNotice ? <p className="service-notice" role="status">{serviceNotice}</p> : null}
@@ -437,19 +491,38 @@ export function HealthAgentApp() {
                 </div>
               ) : null}
             </div>
-          ) : messages.map((item) => (
-            <article className={`message ${item.role}`} key={item.id}>
-              <span>{item.role === "assistant" ? "✦" : "Tú"}</span>
-              <div>
-                <p>{item.content}</p>
-                {item.outcome ? (
-                  <small>
-                    {outcomeText(item.outcome)} · {conversationDetailText(item.outcome, item.llmUsed)}
-                  </small>
-                ) : null}
-              </div>
-            </article>
-          ))}
+          ) : (
+            <>
+              {messages.map((item) => (
+                <article className={`message ${item.role}`} key={item.id}>
+                  <span>{item.role === "assistant" ? "✦" : "Tú"}</span>
+                  <div>
+                    <p>{item.content}</p>
+                    {item.outcome ? (
+                      <small>
+                        {outcomeText(item.outcome)} · {conversationDetailText(item.outcome, item.llmUsed)}
+                      </small>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+              {canUseAgent && !busy ? (
+                <section
+                  className="follow-up-suggestions"
+                  aria-label="Preguntas sugeridas para continuar"
+                >
+                  <p>Preguntas sugeridas</p>
+                  <div className={`prompts ${activeAgent === "receivables" ? "receivables-prompts" : ""}`}>
+                    {agent.prompts.map((prompt) => (
+                      <button key={prompt} type="button" onClick={() => setQuestion(prompt)}>
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </>
+          )}
         </div>
 
         {error ? <p className="inline-error" role="alert">{error}</p> : null}
@@ -467,7 +540,9 @@ export function HealthAgentApp() {
                 ? "receivables-chat-scope"
                 : activeAgent === "cash-flow"
                   ? "cash-flow-chat-scope"
-                  : undefined
+                  : activeAgent === "bank-reconciliation"
+                    ? "bank-reconciliation-chat-scope"
+                    : undefined
             }
             placeholder={canUseAgent ? agent.placeholder : "Selecciona una empresa activa para comenzar"}
           />
@@ -485,7 +560,10 @@ export function HealthAgentApp() {
           {report ? (
             <>
               <span className={`badge ${report.overall_status}`}>{statusText(report.overall_status)}</span>
-              <strong>{report.summary.finding_count} alertas en revisión</strong>
+              <strong>
+                {report.summary.finding_count}{" "}
+                {report.summary.finding_count === 1 ? "alerta" : "alertas"} en revisión
+              </strong>
               <p>{report.summary.critical_count} críticas · {report.summary.warning_count} advertencias</p>
             </>
           ) : (
