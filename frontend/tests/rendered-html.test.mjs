@@ -54,6 +54,7 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/bank-reconciliation\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/treasury\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/accounts/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/balance-snapshots/);
   assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/transactions/);
   assert.match(api, /\/companies\/\$\{companyId\}\/receivables\/open-items/);
   assert.match(api, /\/companies\/\$\{companyId\}\/payables\/open-items/);
@@ -85,6 +86,7 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(component, /treasury-chat-scope/);
   assert.match(component, /Movimiento neto proyectado a 30 días/);
   assert.match(component, /No representa disponibilidad bancaria real/);
+  assert.match(component, /Saldos bancarios verificados/);
   assert.match(component, /<b>\{finding\.message\}<\/b>/);
   assert.match(component, /Qué hacer: \{finding\.recommendation\}/);
   assert.match(component, /fallbackResponseFor/);
@@ -100,10 +102,13 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(styles, /\.follow-up-suggestions/);
   assert.match(cashFlowStyles, /\.cash-flow-periods/);
   assert.match(bankStyles, /\.bank-transaction-list/);
+  assert.match(bankStyles, /\.bank-balance-summary/);
   assert.match(operations, /canManage/);
   assert.match(operations, /confirmed: true/);
   assert.match(operations, /No incluyas datos personales/);
   assert.match(bankOperations, /No guardamos el número completo de la cuenta/);
+  assert.match(bankOperations, /Registrar saldo verificado/);
+  assert.match(bankOperations, /Cortes bancarios verificados/);
   assert.match(bankOperations, /window\.confirm/);
   assert.match(bankOperations, /window\.confirm[\s\S]*handleReview/);
   assert.doesNotMatch(component, /localStorage|sessionStorage/);

@@ -26,7 +26,7 @@ class TreasuryAmount(CanonicalModel):
 
 
 class TreasuryMetrics(CanonicalModel):
-    """Señales agregadas; ninguna representa por sí sola saldo bancario."""
+    """Señales agregadas de proyección, conciliación y cortes bancarios."""
 
     as_of_date: date = Field(default_factory=date.today)
     horizon_days: int = Field(default=30, ge=1, le=365)
@@ -37,6 +37,11 @@ class TreasuryMetrics(CanonicalModel):
     receivables_missing_due_date: int = Field(ge=0)
     payables_missing_due_date: int = Field(ge=0)
     bank_accounts: int = Field(ge=0)
+    verified_balance_accounts: int = Field(ge=0)
+    bank_accounts_without_verified_balance: int = Field(ge=0)
+    verified_balance_coverage: Decimal = Field(ge=0, le=100)
+    verified_balance_cutoff_date: date | None = None
+    verified_bank_balances: tuple[TreasuryAmount, ...] = ()
     imported_bank_transactions: int = Field(ge=0)
     reconciled_bank_transactions: int = Field(ge=0)
     pending_bank_transactions: int = Field(ge=0)

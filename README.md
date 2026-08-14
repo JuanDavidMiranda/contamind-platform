@@ -222,9 +222,11 @@ Para la revisión local con `contamind-demo.db`, puede cargarse `backend/example
 
 `POST /api/v1/companies/{company_id}/agents/treasury/chat` combina la proyección de facturas abiertas a 30 días (incluidos vencidos) con la calidad de la conciliación bancaria. Presenta entradas, salidas y movimiento neto por moneda, facturas sin vencimiento y señales de conciliación que aún requieren revisión humana.
 
+Los cortes bancarios verificados se registran en `POST /api/v1/companies/{company_id}/bank-reconciliation/accounts/{bank_account_id}/balance-snapshots`, con fecha, saldo y `confirmed: true`; la lectura se realiza en `GET /api/v1/companies/{company_id}/bank-reconciliation/balance-snapshots`. Tesorería sólo suma saldos cuando todas las cuentas activas tienen corte en la misma fecha y siempre mantiene las monedas separadas.
+
 El agente es determinista y de solo lectura. No muestra documentos, cuentas, extractos, referencias, terceros o pagos individuales; tampoco registra, programa, prioriza ni autoriza pagos o transferencias. Cada consulta conserva sólo metadatos agregados de auditoría en `agent_executions`.
 
-El diagnóstico **no calcula disponibilidad bancaria real ni responde si se puede pagar**: un extracto parcial no demuestra saldo actual y pueden existir obligaciones fuera del modelo. Antes de decidir pagos o financiación se debe contrastar el reporte con un saldo bancario verificado por moneda y completar las diferencias de conciliación. Ver `backend/docs/adr/0022-agente-de-tesoreria-y-liquidez.md`.
+Un saldo verificado muestra un corte bancario, no una autorización de pago ni liquidez futura. Antes de decidir pagos o financiación se deben revisar las obligaciones fuera del modelo, la certeza de recaudo, las diferencias de conciliación y las aprobaciones requeridas. Ver `backend/docs/adr/0022-agente-de-tesoreria-y-liquidez.md` y `backend/docs/adr/0023-cortes-de-saldo-bancario-verificados.md`.
 
 #### Capa LLM opcional y activación productiva
 

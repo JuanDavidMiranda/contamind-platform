@@ -40,6 +40,8 @@ export type Report = {
     projected_inflows_30d?: CashFlowAmount[];
     projected_outflows_30d?: CashFlowAmount[];
     net_projected_movements_30d?: CashFlowAmount[];
+    verified_bank_balances?: CashFlowAmount[];
+    verified_balance_cutoff_date?: string | null;
   };
   findings: Finding[];
 };
@@ -157,6 +159,21 @@ export type BankImportResult = {
   accepted_rows: number;
   duplicate_rows: number;
   rejections: Array<{ row_number: number; message: string }>;
+};
+
+export type BankBalanceSnapshot = {
+  id: string;
+  bank_account_id: string;
+  as_of_date: string;
+  balance: string;
+  currency_code: string;
+  verified_by_user_id: number;
+  verified_at: string;
+};
+
+export type BankBalanceSnapshotsResponse = {
+  can_manage: boolean;
+  snapshots: BankBalanceSnapshot[];
 };
 
 export type BankReviewAction = "confirm" | "dismiss" | "exclude" | "reopen";

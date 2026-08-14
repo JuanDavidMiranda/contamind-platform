@@ -12,10 +12,15 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.database.database import get_db
-from app.models.bank_reconciliation import BankAccountRecord, BankTransactionRecord
+from app.models.bank_reconciliation import (
+    BankAccountRecord,
+    BankBalanceSnapshotRecord,
+    BankTransactionRecord,
+)
 from app.models.user import User
 from app.services.bank_reconciliation_service import (
     BankImportResult,
+    BankBalanceSnapshotItem,
     BankReconciliationService,
     BankTransactionItem,
 )
@@ -66,6 +71,43 @@ class BankAccountsResponse(BaseModel):
     can_manage: bool
     can_configure: bool
     accounts: list[BankAccountResponse]
+
+
+class BankBalanceSnapshotCreate(BaseModel):
+    as_of_date: date
+    balance: Decimal = Field(max_digits=18, decimal_places=2)
+    confirmed: Literal[True]
+
+
+class BankBalanceSnapshotResponse(BaseModel):
+    id: UUID
+    bank_account_id: UUID
+    as_of_date: date
+    balance: Decimal
+    currency_code: str
+    verified_by_user_id: int
+    verified_at: datetime
+
+    @classmethod
+    def from_record(cls, record: BankBalanceSnapshotRecord) -> "BankBalanceSnapshotResponse":
+        return cls(
+            id=UUID(record.id),
+            bank_account_id=UUID(record.bank_account_id),
+            as_of_date=record.as_of_date,
+            balance=record.balance,
+            currency_code=record.currency_code,
+            verified_by_user_id=record.verified_by_user_id,
+            verified_at=record.verified_at,
+        )
+
+    @classmethod
+    def from_item(cls, item: BankBalanceSnapshotItem) -> "BankBalanceSnapshotResponse":
+        return cls(**item.__dict__)
+
+
+class BankBalanceSnapshotsResponse(BaseModel):
+    can_manage: bool
+    snapshots: list[BankBalanceSnapshotResponse]
 
 
 class BankImportRejectionResponse(BaseModel):
@@ -196,6 +238,54 @@ def create_bank_account(
         actor_user_id=user.id,
     )
     return BankAccountResponse.from_record(record)
+
+
+@router.get(
+    "/{company_id}/bank-reconciliation/balance-snapshots",
+    response_model=BankBalanceSnapshotsResponse,
+)
+def list_bank_balance_snapshots(
+    company_id: UUID,
+    as_of: date | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    company = CompanyService(db).get_company(company_id)
+    role = require_company_role(user, db, company.id, VIEW_COMPANY_ROLES)
+    snapshots = BankReconciliationService(db).list_latest_balance_snapshots(
+        company.id,
+        as_of=as_of,
+    )
+    return BankBalanceSnapshotsResponse(
+        can_manage=user.is_platform_admin or role in OPERATE_SOURCES_ROLES,
+        snapshots=[BankBalanceSnapshotResponse.from_item(item) for item in snapshots],
+    )
+
+
+@router.post(
+    "/{company_id}/bank-reconciliation/accounts/{bank_account_id}/balance-snapshots",
+    response_model=BankBalanceSnapshotResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_bank_balance_snapshot(
+    company_id: UUID,
+    bank_account_id: UUID,
+    payload: BankBalanceSnapshotCreate,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _current_user(authorization, db)
+    company = CompanyService(db).require_active_company(company_id)
+    require_company_role(user, db, company.id, OPERATE_SOURCES_ROLES)
+    record = BankReconciliationService(db).create_balance_snapshot(
+        company.id,
+        bank_account_id,
+        as_of_date=payload.as_of_date,
+        balance=payload.balance,
+        actor_user_id=user.id,
+    )
+    return BankBalanceSnapshotResponse.from_record(record)
 
 
 @router.post(

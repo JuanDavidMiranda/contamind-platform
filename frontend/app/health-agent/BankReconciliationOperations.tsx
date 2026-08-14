@@ -5,13 +5,16 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import {
   ApiError,
   bankAccounts,
+  bankBalanceSnapshots,
   bankTransactions,
   createBankAccount,
+  createBankBalanceSnapshot,
   importBankStatement,
   reviewBankTransaction,
 } from "./api";
 import type {
   BankAccount,
+  BankBalanceSnapshot,
   BankImportResult,
   BankReviewAction,
   BankTransaction,
@@ -37,6 +40,7 @@ const statusLabels: Record<BankTransactionStatus, string> = {
 export function BankReconciliationOperations({ token, companyId, companyName, enabled }: Props) {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
+  const [balanceSnapshots, setBalanceSnapshots] = useState<BankBalanceSnapshot[]>([]);
   const [total, setTotal] = useState(0);
   const [canManage, setCanManage] = useState(false);
   const [canConfigure, setCanConfigure] = useState(false);
@@ -49,6 +53,7 @@ export function BankReconciliationOperations({ token, companyId, companyName, en
     if (!enabled) {
       setAccounts([]);
       setTransactions([]);
+      setBalanceSnapshots([]);
       setTotal(0);
       setLoading(false);
       return;
@@ -56,14 +61,16 @@ export function BankReconciliationOperations({ token, companyId, companyName, en
     setLoading(true);
     setError(null);
     try {
-      const [accountPage, transactionPage] = await Promise.all([
+      const [accountPage, transactionPage, balancePage] = await Promise.all([
         bankAccounts(token, companyId),
         bankTransactions(token, companyId, { limit: 100 }),
+        bankBalanceSnapshots(token, companyId),
       ]);
       setAccounts(accountPage.accounts);
       setTransactions(transactionPage.items);
+      setBalanceSnapshots(balancePage.snapshots);
       setTotal(transactionPage.total);
-      setCanManage(accountPage.can_manage && transactionPage.can_manage);
+      setCanManage(accountPage.can_manage && transactionPage.can_manage && balancePage.can_manage);
       setCanConfigure(accountPage.can_configure);
       setSelectedAccountId((current) => (
         accountPage.accounts.some((account) => account.id === current)
@@ -156,7 +163,35 @@ export function BankReconciliationOperations({ token, companyId, companyName, en
               await load();
             }}
           />
+          <BankBalanceSnapshotForm
+            token={token}
+            companyId={companyId}
+            accounts={accounts}
+            selectedAccountId={selectedAccountId}
+            onAccountChange={setSelectedAccountId}
+            onRecorded={load}
+          />
         </div>
+      ) : null}
+
+      {accounts.length ? (
+        <section className="operations-form bank-balance-summary" aria-label="Cortes bancarios verificados">
+          <h3>Cortes bancarios verificados</h3>
+          <p>El corte conserva el saldo confirmado por cuenta y fecha; no reemplaza la conciliación.</p>
+          {balanceSnapshots.length ? (
+            <ul>
+              {balanceSnapshots.map((snapshot) => {
+                const account = accounts.find((item) => item.id === snapshot.bank_account_id);
+                return (
+                  <li key={snapshot.id}>
+                    <span>{account?.name || "Cuenta"} · {formatDate(snapshot.as_of_date)}</span>
+                    <strong>{formatMoney(snapshot.balance, snapshot.currency_code)}</strong>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : <p className="note-warning">Aún no hay cortes registrados. Tesorería no podrá consolidar el saldo bancario.</p>}
+        </section>
       ) : null}
 
       {importResult ? (
@@ -320,6 +355,61 @@ function BankImportForm({ token, companyId, accounts, selectedAccountId, onAccou
       <p className="note-warning"><b>Revisa el archivo.</b> Evita incluir números completos de cuenta, documentos o datos de contacto en descripción y referencia.</p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       <button className="secondary-action" disabled={!file || !selectedAccountId || uploading}>{uploading ? "Importando…" : "Importar extracto"}</button>
+    </form>
+  );
+}
+
+function BankBalanceSnapshotForm({ token, companyId, accounts, selectedAccountId, onAccountChange, onRecorded }: {
+  token: string;
+  companyId: string;
+  accounts: BankAccount[];
+  selectedAccountId: string;
+  onAccountChange: (id: string) => void;
+  onRecorded: () => Promise<void>;
+}) {
+  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [balance, setBalance] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAccountId || !confirmed) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createBankBalanceSnapshot(token, companyId, selectedAccountId, {
+        as_of_date: asOfDate,
+        balance,
+        confirmed: true,
+      });
+      setBalance("");
+      setConfirmed(false);
+      await onRecorded();
+    } catch (cause) {
+      setError(messageFor(cause, "No fue posible registrar el corte bancario."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="operations-form bank-balance-form" onSubmit={submit}>
+      <h3>Registrar saldo verificado</h3>
+      <p>Ingresa el saldo que confirmaste para la fecha de corte. Puede ser negativo si existe sobregiro.</p>
+      <label>Cuenta<select value={selectedAccountId} onChange={(event) => onAccountChange(event.target.value)} required>
+        <option value="">Selecciona una cuenta</option>
+        {accounts.filter((account) => account.status === "active").map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency_code}</option>)}
+      </select></label>
+      <label>Fecha de corte<input type="date" value={asOfDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setAsOfDate(event.target.value)} required /></label>
+      <label>Saldo verificado<input type="number" value={balance} onChange={(event) => setBalance(event.target.value)} step="0.01" required /></label>
+      <label className="check-line confirm-line">
+        <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+        Confirmo que este es el saldo verificado de la cuenta en la fecha indicada.
+      </label>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      <button className="secondary-action" disabled={!selectedAccountId || !balance || !confirmed || saving}>{saving ? "Registrando…" : "Registrar corte"}</button>
     </form>
   );
 }

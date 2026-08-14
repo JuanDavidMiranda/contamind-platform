@@ -43,6 +43,37 @@ class BankAccountRecord(Base):
     )
 
 
+class BankBalanceSnapshotRecord(Base):
+    """Corte manual y verificado de saldo, inmutable para conservar trazabilidad."""
+
+    __tablename__ = "bank_balance_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "bank_account_id",
+            "as_of_date",
+            name="uq_bank_balance_snapshots_account_date",
+        ),
+        Index(
+            "ix_bank_balance_snapshots_company_date",
+            "company_id",
+            "as_of_date",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    company_id: Mapped[str] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    bank_account_id: Mapped[str] = mapped_column(
+        ForeignKey("bank_accounts.id", ondelete="CASCADE"), index=True
+    )
+    as_of_date: Mapped[date] = mapped_column(Date)
+    balance: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    currency_code: Mapped[str] = mapped_column(String(3))
+    verified_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    verified_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class BankStatementImportRecord(Base):
     __tablename__ = "bank_statement_imports"
     __table_args__ = (

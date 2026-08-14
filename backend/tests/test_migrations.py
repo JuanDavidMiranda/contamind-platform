@@ -78,6 +78,7 @@ def test_migrations_apply_on_empty_database():
                     "provider_sync_jobs",
                     "agent_executions",
                     "bank_accounts",
+                    "bank_balance_snapshots",
                     "bank_statement_imports",
                     "bank_transactions",
                 } <= tables

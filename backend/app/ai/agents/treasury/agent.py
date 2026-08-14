@@ -108,7 +108,7 @@ class TreasuryAgent(BaseAgent):
             "¿Qué debo revisar primero para tesorería?",
             "¿Qué movimiento neto se proyecta a 30 días por moneda?",
             "¿La conciliación permite usar la señal bancaria?",
-            "¿Qué impide conocer la disponibilidad real?",
+            "¿Cuál es el saldo bancario verificado por moneda?",
         )
         if any(pattern.search(question) for pattern in _SENSITIVE_PATTERNS):
             return TreasuryConversation(
@@ -121,15 +121,7 @@ class TreasuryAgent(BaseAgent):
             )
         normalized = self._normalize(question)
         if self._requests_actual_availability(normalized):
-            return TreasuryConversation(
-                outcome="out_of_scope",
-                response=(
-                    "No puedo determinar si puedes pagar ni la disponibilidad real: hace falta "
-                    "un saldo bancario verificado y pueden existir obligaciones fuera del modelo. "
-                    "Sí puedo explicar la proyección abierta y la calidad de conciliación."
-                ),
-                suggested_questions=suggested,
-            )
+            return self._availability_conversation(report, suggested)
         if self._requests_individual_or_write(normalized):
             return TreasuryConversation(
                 outcome="out_of_scope",
@@ -142,7 +134,7 @@ class TreasuryAgent(BaseAgent):
             )
 
         metrics = report.metrics
-        if any(term in normalized for term in ("concili", "banco", "extracto", "cobertura")):
+        if any(term in normalized for term in ("saldo", "banco", "extracto", "cobertura")):
             response = (
                 f"La conciliación tiene {metrics.reconciled_bank_transactions} movimientos "
                 f"confirmados de {metrics.imported_bank_transactions} importados y una cobertura "
@@ -152,6 +144,11 @@ class TreasuryAgent(BaseAgent):
                 f"{metrics.unmatched_bank_transactions} sin coincidencia y "
                 f"{metrics.ambiguous_bank_transactions} ambiguos."
             )
+            if metrics.verified_balance_cutoff_date is not None:
+                response += (
+                    f" El saldo bancario verificado al {metrics.verified_balance_cutoff_date} "
+                    f"es {self._amounts(metrics.verified_bank_balances)} por moneda."
+                )
         elif any(term in normalized for term in ("30 dias", "proyeccion", "entrada", "salida", "neto", "moneda")):
             response = (
                 "En los próximos treinta días, incluidos vencidos, las entradas abiertas "
@@ -162,8 +159,8 @@ class TreasuryAgent(BaseAgent):
             )
         elif any(term in normalized for term in ("impide", "faltan", "disponibilidad", "liquidez")):
             response = (
-                "La disponibilidad real no puede determinarse con este reporte porque no hay "
-                "un saldo bancario verificado y pueden existir obligaciones fuera del modelo. "
+                "La decisión de pago no puede determinarse sólo con este reporte porque pueden "
+                "existir obligaciones fuera del modelo. "
                 f"Además hay {metrics.receivables_missing_due_date} cobros y "
                 f"{metrics.payables_missing_due_date} pagos sin vencimiento, y "
                 f"{metrics.pending_bank_transactions + metrics.suggested_bank_transactions} "
@@ -180,6 +177,33 @@ class TreasuryAgent(BaseAgent):
         return TreasuryConversation(
             outcome="answered",
             response=response,
+            suggested_questions=suggested,
+        )
+
+    def _availability_conversation(
+        self,
+        report: TreasuryReport,
+        suggested: tuple[str, ...],
+    ) -> TreasuryConversation:
+        metrics = report.metrics
+        if metrics.verified_balance_cutoff_date is None:
+            return TreasuryConversation(
+                outcome="out_of_scope",
+                response=(
+                    "Aún no puedo mostrar un saldo bancario consolidado: falta un corte "
+                    "verificado para alguna cuenta activa o los cortes no tienen la misma fecha. "
+                    "Registra los cortes en Conciliación operativa y luego vuelve a consultar."
+                ),
+                suggested_questions=suggested,
+            )
+        return TreasuryConversation(
+            outcome="answered",
+            response=(
+                f"El saldo bancario verificado al {metrics.verified_balance_cutoff_date} es "
+                f"{self._amounts(metrics.verified_bank_balances)} por moneda. Es un corte "
+                "confirmado, no una autorización automática de pago: antes de pagar revisa "
+                "las obligaciones fuera del modelo, la conciliación pendiente y la certeza de recaudo."
+            ),
             suggested_questions=suggested,
         )
 

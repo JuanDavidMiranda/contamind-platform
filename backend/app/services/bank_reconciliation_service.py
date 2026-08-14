@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.accounting import InvoiceRecord, PaymentRecord
 from app.models.bank_reconciliation import (
     BankAccountRecord,
+    BankBalanceSnapshotRecord,
     BankStatementImportRecord,
     BankTransactionRecord,
 )
@@ -76,6 +77,17 @@ class BankTransactionPage:
     items: tuple[BankTransactionItem, ...]
 
 
+@dataclass(frozen=True)
+class BankBalanceSnapshotItem:
+    id: UUID
+    bank_account_id: UUID
+    as_of_date: date
+    balance: Decimal
+    currency_code: str
+    verified_by_user_id: int
+    verified_at: datetime
+
+
 class BankReconciliationService:
     """Importa extractos y propone coincidencias sin confirmar decisiones humanas."""
 
@@ -133,6 +145,89 @@ class BankReconciliationService:
                 .where(BankAccountRecord.company_id == str(company_id))
                 .order_by(BankAccountRecord.status.asc(), BankAccountRecord.name.asc())
             )
+        )
+
+    def create_balance_snapshot(
+        self,
+        company_id: UUID,
+        bank_account_id: UUID,
+        *,
+        as_of_date: date,
+        balance: Decimal,
+        actor_user_id: int,
+    ) -> BankBalanceSnapshotRecord:
+        if as_of_date > datetime.now(UTC).date():
+            raise app_error(
+                "VALIDATION_ERROR",
+                message="El corte de saldo no puede tener una fecha futura.",
+            )
+        account = self._account(company_id, bank_account_id, require_active=True)
+        existing = self._db.scalar(
+            select(BankBalanceSnapshotRecord.id).where(
+                BankBalanceSnapshotRecord.bank_account_id == str(bank_account_id),
+                BankBalanceSnapshotRecord.as_of_date == as_of_date,
+            )
+        )
+        if existing is not None:
+            raise app_error(
+                "CONFLICT",
+                message="Ya existe un corte verificado para esta cuenta en esa fecha.",
+            )
+        record = BankBalanceSnapshotRecord(
+            id=str(uuid4()),
+            company_id=str(company_id),
+            bank_account_id=str(bank_account_id),
+            as_of_date=as_of_date,
+            balance=balance.quantize(_CENT),
+            currency_code=account.currency_code,
+            verified_by_user_id=actor_user_id,
+        )
+        self._db.add(record)
+        self._db.commit()
+        self._db.refresh(record)
+        return record
+
+    def list_latest_balance_snapshots(
+        self,
+        company_id: UUID,
+        *,
+        as_of: date | None,
+    ) -> tuple[BankBalanceSnapshotItem, ...]:
+        filters = [BankBalanceSnapshotRecord.company_id == str(company_id)]
+        if as_of is not None:
+            filters.append(BankBalanceSnapshotRecord.as_of_date <= as_of)
+        latest_dates = (
+            select(
+                BankBalanceSnapshotRecord.bank_account_id.label("bank_account_id"),
+                func.max(BankBalanceSnapshotRecord.as_of_date).label("as_of_date"),
+            )
+            .where(*filters)
+            .group_by(BankBalanceSnapshotRecord.bank_account_id)
+            .subquery()
+        )
+        records = self._db.scalars(
+            select(BankBalanceSnapshotRecord)
+            .join(
+                latest_dates,
+                (BankBalanceSnapshotRecord.bank_account_id == latest_dates.c.bank_account_id)
+                & (BankBalanceSnapshotRecord.as_of_date == latest_dates.c.as_of_date),
+            )
+            .order_by(
+                BankBalanceSnapshotRecord.as_of_date.desc(),
+                BankBalanceSnapshotRecord.bank_account_id.asc(),
+            )
+        )
+        return tuple(
+            BankBalanceSnapshotItem(
+                id=UUID(record.id),
+                bank_account_id=UUID(record.bank_account_id),
+                as_of_date=record.as_of_date,
+                balance=record.balance,
+                currency_code=record.currency_code,
+                verified_by_user_id=record.verified_by_user_id,
+                verified_at=record.verified_at,
+            )
+            for record in records
         )
 
     def import_csv(

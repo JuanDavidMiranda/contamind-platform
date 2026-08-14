@@ -159,6 +159,9 @@ const agentDetails: Record<AgentKey, {
       ["receivables_missing_due_date", "Cobros sin fecha"],
       ["payables_missing_due_date", "Pagos sin fecha"],
       ["bank_accounts", "Cuentas configuradas"],
+      ["verified_balance_accounts", "Cuentas con corte"],
+      ["bank_accounts_without_verified_balance", "Cuentas sin corte"],
+      ["verified_balance_coverage", "Cobertura de saldos (%)"],
       ["imported_bank_transactions", "Movimientos bancarios"],
       ["reconciled_bank_transactions", "Conciliados"],
       ["reconciliation_rate", "Cobertura (%)"],
@@ -493,7 +496,8 @@ export function HealthAgentApp() {
           <p id="treasury-chat-scope" className="scope-hint">
             <b>Qué puedes consultar:</b> proyección de entradas y salidas a 30 días,
             calidad de conciliación y señales que requieren revisión. El diagnóstico no
-            demuestra saldo bancario ni autoriza o programa pagos.
+            autoriza o programa pagos; usa Conciliación operativa para registrar cortes
+            de saldo bancario verificados.
           </p>
         ) : null}
         {serviceNotice ? <p className="service-notice" role="status">{serviceNotice}</p> : null}
@@ -664,6 +668,20 @@ export function HealthAgentApp() {
                   ))}
                 </dl>
                 <small>No representa disponibilidad bancaria real.</small>
+              </section>
+            ) : null}
+            {activeAgent === "treasury" && report.metrics.verified_bank_balances?.length ? (
+              <section className="card balances">
+                <h2>Saldos bancarios verificados</h2>
+                <dl>
+                  {report.metrics.verified_bank_balances.map((amount) => (
+                    <div key={amount.currency_code}>
+                      <dt>{amount.currency_code}</dt>
+                      <dd>{formatMoney(amount.amount, amount.currency_code)}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <small>Corte: {report.metrics.verified_balance_cutoff_date || "sin fecha común"}. No autoriza pagos automáticamente.</small>
               </section>
             ) : null}
             {activeAgent === "cash-flow" && report.metrics.cash_flow_periods?.length ? (

@@ -4,6 +4,8 @@ import type {
   CollectionFollowUpUpdate,
   BankAccount,
   BankAccountsResponse,
+  BankBalanceSnapshot,
+  BankBalanceSnapshotsResponse,
   BankImportResult,
   BankReviewAction,
   BankTransaction,
@@ -148,6 +150,23 @@ export const createBankAccount = (
   payload: { name: string; bank_name?: string | null; currency_code: string; confirmed: true },
 ) => request<BankAccount>(
   `/companies/${companyId}/bank-reconciliation/accounts`,
+  { method: "POST", body: JSON.stringify(payload) },
+  token,
+);
+
+export const bankBalanceSnapshots = (token: string, companyId: string) => request<BankBalanceSnapshotsResponse>(
+  `/companies/${companyId}/bank-reconciliation/balance-snapshots`,
+  {},
+  token,
+);
+
+export const createBankBalanceSnapshot = (
+  token: string,
+  companyId: string,
+  bankAccountId: string,
+  payload: { as_of_date: string; balance: string; confirmed: true },
+) => request<BankBalanceSnapshot>(
+  `/companies/${companyId}/bank-reconciliation/accounts/${bankAccountId}/balance-snapshots`,
   { method: "POST", body: JSON.stringify(payload) },
   token,
 );

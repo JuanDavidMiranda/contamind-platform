@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.agents.treasury.schemas import (
@@ -20,6 +21,10 @@ from app.services.bank_reconciliation_analysis_service import (
     BankReconciliationAnalysisService,
 )
 from app.services.cash_flow_service import CashFlowService
+from app.models.bank_reconciliation import (
+    BankAccountRecord,
+    BankBalanceSnapshotRecord,
+)
 
 
 _CENT = Decimal("0.01")
@@ -41,7 +46,13 @@ class TreasuryService:
         analysis_date = as_of or datetime.now(UTC).date()
         cash_flow = CashFlowService(self._db).analyze(company_id, as_of=analysis_date)
         reconciliation = BankReconciliationAnalysisService(self._db).analyze(company_id)
-        metrics = self._metrics(cash_flow.metrics, reconciliation.metrics, analysis_date)
+        balance_snapshot_metrics = self._balance_snapshot_metrics(company_id, analysis_date)
+        metrics = self._metrics(
+            cash_flow.metrics,
+            reconciliation.metrics,
+            balance_snapshot_metrics,
+            analysis_date,
+        )
         findings = self._findings(metrics)
         summary = self._summary(findings)
         return TreasuryReport(
@@ -53,7 +64,7 @@ class TreasuryService:
             findings=tuple(findings),
         )
 
-    def _metrics(self, cash_flow, reconciliation, as_of: date) -> TreasuryMetrics:
+    def _metrics(self, cash_flow, reconciliation, balance_snapshots, as_of: date) -> TreasuryMetrics:
         inflows: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
         outflows: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
         overdue_receivables = 0
@@ -76,6 +87,11 @@ class TreasuryService:
             receivables_missing_due_date=cash_flow.receivables_missing_due_date,
             payables_missing_due_date=cash_flow.payables_missing_due_date,
             bank_accounts=reconciliation.bank_accounts,
+            verified_balance_accounts=balance_snapshots["accounts"],
+            bank_accounts_without_verified_balance=balance_snapshots["missing_accounts"],
+            verified_balance_coverage=balance_snapshots["coverage"],
+            verified_balance_cutoff_date=balance_snapshots["cutoff_date"],
+            verified_bank_balances=balance_snapshots["balances"],
             imported_bank_transactions=reconciliation.imported_transactions,
             reconciled_bank_transactions=reconciliation.reconciled_transactions,
             pending_bank_transactions=reconciliation.pending_transactions,
@@ -84,6 +100,66 @@ class TreasuryService:
             ambiguous_bank_transactions=reconciliation.ambiguous_transactions,
             reconciliation_rate=reconciliation.reconciliation_rate,
         )
+
+    def _balance_snapshot_metrics(self, company_id: UUID, as_of: date) -> dict[str, object]:
+        active_accounts = tuple(
+            self._db.scalars(
+                select(BankAccountRecord).where(
+                    BankAccountRecord.company_id == str(company_id),
+                    BankAccountRecord.status == "active",
+                )
+            )
+        )
+        if not active_accounts:
+            return {
+                "accounts": 0,
+                "missing_accounts": 0,
+                "coverage": Decimal("0"),
+                "cutoff_date": None,
+                "balances": (),
+            }
+        latest_dates = (
+            select(
+                BankBalanceSnapshotRecord.bank_account_id.label("bank_account_id"),
+                func.max(BankBalanceSnapshotRecord.as_of_date).label("as_of_date"),
+            )
+            .where(
+                BankBalanceSnapshotRecord.company_id == str(company_id),
+                BankBalanceSnapshotRecord.as_of_date <= as_of,
+            )
+            .group_by(BankBalanceSnapshotRecord.bank_account_id)
+            .subquery()
+        )
+        snapshots = tuple(
+            self._db.scalars(
+                select(BankBalanceSnapshotRecord)
+                .join(
+                    latest_dates,
+                    (BankBalanceSnapshotRecord.bank_account_id == latest_dates.c.bank_account_id)
+                    & (BankBalanceSnapshotRecord.as_of_date == latest_dates.c.as_of_date),
+                )
+                .join(BankAccountRecord, BankAccountRecord.id == BankBalanceSnapshotRecord.bank_account_id)
+                .where(BankAccountRecord.status == "active")
+            )
+        )
+        snapshot_count = len(snapshots)
+        account_count = len(active_accounts)
+        coverage = (
+            Decimal(snapshot_count * 100) / Decimal(account_count)
+        ).quantize(_CENT)
+        cutoff_dates = {snapshot.as_of_date for snapshot in snapshots}
+        aligned = snapshot_count == account_count and len(cutoff_dates) == 1
+        balances: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+        if aligned:
+            for snapshot in snapshots:
+                balances[snapshot.currency_code] += Decimal(snapshot.balance)
+        return {
+            "accounts": snapshot_count,
+            "missing_accounts": account_count - snapshot_count,
+            "coverage": coverage,
+            "cutoff_date": next(iter(cutoff_dates)) if aligned else None,
+            "balances": self._amounts(balances) if aligned else (),
+        }
 
     @staticmethod
     def _amounts(values: dict[str, Decimal]) -> tuple[TreasuryAmount, ...]:
@@ -109,15 +185,56 @@ class TreasuryService:
 
     @staticmethod
     def _findings(metrics: TreasuryMetrics) -> list[TreasuryFinding]:
-        findings = [
-            TreasuryFinding(
-                code="TREASURY_POSITION_REQUIRES_VERIFIED_BANK_BALANCE",
-                severity=TreasurySeverity.INFO,
-                message="El reporte no determina disponibilidad real porque no recibe un saldo bancario verificado ni todas las obligaciones fuera del modelo.",
-                evidence={"bank_accounts": metrics.bank_accounts},
-                recommendation="Contrasta este diagnóstico con el saldo bancario verificado antes de autorizar pagos o financiación.",
+        findings: list[TreasuryFinding] = []
+        if metrics.verified_balance_cutoff_date is not None:
+            findings.append(
+                TreasuryFinding(
+                    code="TREASURY_VERIFIED_BANK_BALANCE_AVAILABLE",
+                    severity=TreasurySeverity.INFO,
+                    message="Hay un corte bancario verificado que cubre todas las cuentas activas en la misma fecha.",
+                    evidence={"accounts": metrics.verified_balance_accounts},
+                    recommendation="Usa el saldo por moneda como punto de partida y contrástalo con vencimientos, recaudos y obligaciones antes de decidir pagos.",
+                )
             )
-        ]
+        elif not metrics.verified_balance_accounts:
+            findings.append(
+                TreasuryFinding(
+                    code="TREASURY_POSITION_REQUIRES_VERIFIED_BANK_BALANCE",
+                    severity=TreasurySeverity.WARNING,
+                    message="No hay un corte bancario verificado para conocer el saldo de las cuentas activas.",
+                    evidence={"accounts": metrics.bank_accounts},
+                    recommendation="Registra un corte de saldo por cada cuenta activa en Conciliación operativa.",
+                )
+            )
+        elif metrics.bank_accounts_without_verified_balance:
+            findings.append(
+                TreasuryFinding(
+                    code="TREASURY_VERIFIED_BANK_BALANCE_INCOMPLETE",
+                    severity=TreasurySeverity.WARNING,
+                    message="Falta un corte bancario verificado para una o más cuentas activas.",
+                    evidence={"accounts_without_snapshot": metrics.bank_accounts_without_verified_balance},
+                    recommendation="Completa el corte de todas las cuentas activas antes de sumar saldos por moneda.",
+                )
+            )
+        else:
+            findings.append(
+                TreasuryFinding(
+                    code="TREASURY_VERIFIED_BANK_BALANCE_CUTS_NOT_ALIGNED",
+                    severity=TreasurySeverity.WARNING,
+                    message="Los cortes bancarios verificados no corresponden a una misma fecha y no se pueden sumar como un saldo único.",
+                    evidence={"accounts": metrics.verified_balance_accounts},
+                    recommendation="Registra cortes de la misma fecha para todas las cuentas activas antes de interpretar una posición consolidada.",
+                )
+            )
+        findings.append(
+            TreasuryFinding(
+                code="TREASURY_PAYMENT_DECISION_REQUIRES_HUMAN_REVIEW",
+                severity=TreasurySeverity.INFO,
+                message="Un saldo bancario verificado no confirma por sí solo que se pueda autorizar un pago.",
+                evidence={"currencies": len(metrics.verified_bank_balances)},
+                recommendation="Verifica obligaciones fuera del modelo, certeza de recaudo y autorizaciones internas antes de tomar una decisión.",
+            )
+        )
         if not metrics.bank_accounts or not metrics.imported_bank_transactions:
             findings.append(
                 TreasuryFinding(

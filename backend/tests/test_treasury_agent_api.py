@@ -111,6 +111,7 @@ def test_treasury_agent_combines_projection_and_reconciliation_without_claiming_
             currency_code="COP",
             created_by_user_id=owner.id,
         )
+        account_id = account.id
         statement_import = BankStatementImportRecord(
             id=str(uuid4()),
             company_id=company_id,
@@ -262,7 +263,31 @@ def test_treasury_agent_combines_projection_and_reconciliation_without_claiming_
     )
     assert availability.status_code == 200
     assert availability.json()["conversation"]["outcome"] == "out_of_scope"
-    assert "disponibilidad real" in availability.json()["conversation"]["response"]
+    assert "corte verificado" in availability.json()["conversation"]["response"]
+
+    snapshot = client.post(
+        f"/api/v1/companies/{company_id}/bank-reconciliation/accounts/{account_id}/balance-snapshots",
+        headers=headers,
+        json={
+            "as_of_date": today.isoformat(),
+            "balance": "2000",
+            "confirmed": True,
+        },
+    )
+    assert snapshot.status_code == 201
+
+    available = client.post(
+        endpoint,
+        headers=headers,
+        json={"message": "¿Cuál es mi saldo bancario disponible?"},
+    )
+    assert available.status_code == 200
+    assert available.json()["conversation"]["outcome"] == "answered"
+    assert available.json()["report"]["metrics"]["verified_balance_coverage"] == "100.00"
+    assert available.json()["report"]["metrics"]["verified_bank_balances"] == [
+        {"currency_code": "COP", "amount": "2000.00"}
+    ]
+    assert "saldo bancario verificado" in available.json()["conversation"]["response"]
 
     individual = client.post(
         endpoint,
@@ -282,7 +307,7 @@ def test_treasury_agent_combines_projection_and_reconciliation_without_claiming_
                 )
             )
         )
-        assert len(executions) == 4
+        assert len(executions) == 5
         assert all(execution.status == "succeeded" for execution in executions)
     finally:
         db.close()
