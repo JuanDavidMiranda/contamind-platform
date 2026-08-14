@@ -37,6 +37,9 @@ export type Report = {
     projected_outflows_90d?: CashFlowAmount[];
     net_movements_90d?: CashFlowAmount[];
     cash_flow_periods?: CashFlowPeriod[];
+    projected_inflows_30d?: CashFlowAmount[];
+    projected_outflows_30d?: CashFlowAmount[];
+    net_projected_movements_30d?: CashFlowAmount[];
   };
   findings: Finding[];
 };

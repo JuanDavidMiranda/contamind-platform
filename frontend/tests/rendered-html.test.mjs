@@ -52,6 +52,7 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/payables\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/cash-flow\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/bank-reconciliation\/chat/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/agents\/treasury\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/accounts/);
   assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/transactions/);
   assert.match(api, /\/companies\/\$\{companyId\}\/receivables\/open-items/);
@@ -68,6 +69,7 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(component, /AGENTE DE CUENTAS POR PAGAR/);
   assert.match(component, /AGENTE DE FLUJO DE CAJA/);
   assert.match(component, /AGENTE DE CONCILIACIÓN BANCARIA/);
+  assert.match(component, /AGENTE DE TESORERÍA Y LIQUIDEZ/);
   assert.match(component, /BankReconciliationOperations/);
   assert.match(component, /ReceivablesOperations/);
   assert.match(component, /Qué puedes consultar:[\s\S]*saldos, vencimientos y antigüedad, pagos/);
@@ -80,6 +82,11 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(component, /No representa saldo bancario disponible/);
   assert.match(component, /Entradas: \{unsignedAmountsText/);
   assert.match(component, /bank-reconciliation-chat-scope/);
+  assert.match(component, /treasury-chat-scope/);
+  assert.match(component, /Movimiento neto proyectado a 30 días/);
+  assert.match(component, /No representa disponibilidad bancaria real/);
+  assert.match(component, /<b>\{finding\.message\}<\/b>/);
+  assert.match(component, /Qué hacer: \{finding\.recommendation\}/);
   assert.match(component, /fallbackResponseFor/);
   assert.match(component, /serviceNoticeFor/);
   assert.match(component, /conversationDetailText/);
@@ -100,6 +107,7 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(bankOperations, /window\.confirm/);
   assert.match(bankOperations, /window\.confirm[\s\S]*handleReview/);
   assert.doesNotMatch(component, /localStorage|sessionStorage/);
+  assert.doesNotMatch(component, /finding\.code\.replaceAll/);
   assert.doesNotMatch(operations, /localStorage|sessionStorage/);
   assert.doesNotMatch(bankOperations, /localStorage|sessionStorage/);
 

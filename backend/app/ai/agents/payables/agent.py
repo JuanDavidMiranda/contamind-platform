@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from app.ai.agents.payables.schemas import PayablesConversation, PayablesReport
+from app.ai.agents.presentation import priority_actions
 from app.ai.core.base_agent import BaseAgent
 from app.ai.core.base_result import BaseResult
 from app.ai.core.base_task import BaseTask
@@ -67,8 +68,11 @@ class PayablesAgent(BaseAgent):
         elif "venc" in normalized or "antig" in normalized:
             response = f"Hay {metrics.overdue_purchase_invoices} facturas de compra vencidas y {metrics.due_today_purchase_invoices} que vencen hoy; {metrics.purchase_invoices_missing_due_date} no tienen vencimiento verificable."
         elif "alert" in normalized or "primero" in normalized or "prior" in normalized:
-            codes = ", ".join(finding.code for finding in report.findings if finding.severity.value in {"critical", "warning"}) or "ninguna alerta prioritaria"
-            response = f"El diagnóstico tiene {report.summary.critical_count} alertas críticas y {report.summary.warning_count} advertencias. Prioriza: {codes}."
+            response = (
+                f"El diagnóstico tiene {report.summary.critical_count} alertas críticas y "
+                f"{report.summary.warning_count} advertencias. "
+                f"{priority_actions(report.findings)}"
+            )
         else:
             response = f"Hay {metrics.open_purchase_invoices} facturas de compra con saldo pendiente. Los importes siguen separados por moneda: {balances}. Puedo ayudarte a interpretar vencimientos, antigüedad y alertas agregadas."
         return PayablesConversation(outcome="answered", response=response, suggested_questions=suggested)

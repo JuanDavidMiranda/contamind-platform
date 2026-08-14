@@ -2,7 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 
-import { ApiError, askBankReconciliation, askCashFlow, askHealth, askPayables, askReceivables, companies, login } from "./api";
+import { ApiError, askBankReconciliation, askCashFlow, askHealth, askPayables, askReceivables, askTreasury, companies, login } from "./api";
 import { BankReconciliationOperations } from "./BankReconciliationOperations";
 import { ReceivablesOperations } from "./ReceivablesOperations";
 import type { CashFlowAmount, Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
@@ -12,7 +12,7 @@ import "./cash-flow.css";
 import "./bank-reconciliation.css";
 
 type Session = { token: string; userId: number };
-type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "bank-reconciliation";
+type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "bank-reconciliation" | "treasury";
 type AgentView = "diagnostic" | "operations";
 type Message = {
   id: string;
@@ -138,6 +138,32 @@ const agentDetails: Record<AgentKey, {
       ["reconciliation_rate", "Cobertura (%)"],
     ],
   },
+  treasury: {
+    label: "Tesorería y liquidez",
+    eyebrow: "AGENTE DE TESORERÍA Y LIQUIDEZ",
+    title: "Decide con señales, no con supuestos.",
+    description: "Relaciona la proyección de cobros y pagos con la calidad de conciliación bancaria, siempre bajo revisión humana.",
+    emptyTitle: "¿Qué quieres revisar de tesorería?",
+    emptyDescription: (companyName) => `Contrastaré la proyección y la conciliación de ${companyName}, sin asumir un saldo bancario disponible.`,
+    placeholder: "Pregunta sobre tesorería, proyección y conciliación…",
+    fallback: "No fue posible generar el diagnóstico de tesorería.",
+    prompts: [
+      "¿Qué debo revisar primero para tesorería?",
+      "¿Qué movimiento neto se proyecta a 30 días por moneda?",
+      "¿La conciliación permite usar la señal bancaria?",
+      "¿Qué impide conocer la disponibilidad real?",
+    ],
+    metrics: [
+      ["horizon_days", "Horizonte (días)"],
+      ["overdue_receivable_invoices", "Cobros vencidos"],
+      ["receivables_missing_due_date", "Cobros sin fecha"],
+      ["payables_missing_due_date", "Pagos sin fecha"],
+      ["bank_accounts", "Cuentas configuradas"],
+      ["imported_bank_transactions", "Movimientos bancarios"],
+      ["reconciled_bank_transactions", "Conciliados"],
+      ["reconciliation_rate", "Cobertura (%)"],
+    ],
+  },
 };
 
 export function HealthAgentApp() {
@@ -221,7 +247,9 @@ export function HealthAgentApp() {
             ? await askPayables(session.token, companyId, text, conversationId)
             : activeAgent === "cash-flow"
               ? await askCashFlow(session.token, companyId, text, conversationId)
-              : await askBankReconciliation(session.token, companyId, text, conversationId);
+              : activeAgent === "bank-reconciliation"
+                ? await askBankReconciliation(session.token, companyId, text, conversationId)
+                : await askTreasury(session.token, companyId, text, conversationId);
       setConversationId(answer.conversation_id);
       if (answer.report) setReport(answer.report);
       setQuestion("");
@@ -461,6 +489,13 @@ export function HealthAgentApp() {
             </button>.
           </p>
         ) : null}
+        {activeAgent === "treasury" ? (
+          <p id="treasury-chat-scope" className="scope-hint">
+            <b>Qué puedes consultar:</b> proyección de entradas y salidas a 30 días,
+            calidad de conciliación y señales que requieren revisión. El diagnóstico no
+            demuestra saldo bancario ni autoriza o programa pagos.
+          </p>
+        ) : null}
         {serviceNotice ? <p className="service-notice" role="status">{serviceNotice}</p> : null}
 
         <div className="messages" aria-live="polite">
@@ -540,9 +575,11 @@ export function HealthAgentApp() {
                 ? "receivables-chat-scope"
                 : activeAgent === "cash-flow"
                   ? "cash-flow-chat-scope"
-                  : activeAgent === "bank-reconciliation"
-                    ? "bank-reconciliation-chat-scope"
-                    : undefined
+                : activeAgent === "bank-reconciliation"
+                  ? "bank-reconciliation-chat-scope"
+                  : activeAgent === "treasury"
+                    ? "treasury-chat-scope"
+                  : undefined
             }
             placeholder={canUseAgent ? agent.placeholder : "Selecciona una empresa activa para comenzar"}
           />
@@ -613,6 +650,22 @@ export function HealthAgentApp() {
                 <small>No representa saldo bancario disponible.</small>
               </section>
             ) : null}
+            {activeAgent === "treasury" && report.metrics.net_projected_movements_30d?.length ? (
+              <section className="card balances cash-flow-net">
+                <h2>Movimiento neto proyectado a 30 días</h2>
+                <dl>
+                  {report.metrics.net_projected_movements_30d.map((amount) => (
+                    <div key={amount.currency_code}>
+                      <dt>{amount.currency_code}</dt>
+                      <dd className={Number(amount.amount) < 0 ? "negative" : "positive"}>
+                        {formatSignedMoney(amount)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <small>No representa disponibilidad bancaria real.</small>
+              </section>
+            ) : null}
             {activeAgent === "cash-flow" && report.metrics.cash_flow_periods?.length ? (
               <section className="card cash-flow-periods">
                 <h2>Movimientos por período</h2>
@@ -656,9 +709,8 @@ function FindingCard({ finding }: { finding: Finding }) {
     <article className="finding">
       <i className={finding.severity} />
       <div>
-        <b>{finding.code.replaceAll("_", " ")}</b>
-        <p>{finding.message}</p>
-        <small>{finding.recommendation}</small>
+        <b>{finding.message}</b>
+        <small>Qué hacer: {finding.recommendation}</small>
       </div>
     </article>
   );

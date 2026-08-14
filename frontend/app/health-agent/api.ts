@@ -67,6 +67,11 @@ export const askBankReconciliation = (token: string, companyId: string, message:
   { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
   token,
 );
+export const askTreasury = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
+  `/companies/${companyId}/agents/treasury/chat`,
+  { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
+  token,
+);
 
 export const openReceivables = (
   token: string,

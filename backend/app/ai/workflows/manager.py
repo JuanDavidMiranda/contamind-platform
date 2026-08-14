@@ -4,6 +4,7 @@ from app.ai.workflows.bank_reconciliation.workflow import BankReconciliationWork
 from app.ai.workflows.cash_flow.workflow import CashFlowWorkflow
 from app.ai.workflows.receivables.workflow import ReceivablesWorkflow
 from app.ai.workflows.payables.workflow import PayablesWorkflow
+from app.ai.workflows.treasury.workflow import TreasuryWorkflow
 from app.ai.workflows.exogena.workflow import ExogenaWorkflow
 
 
@@ -18,6 +19,7 @@ class WorkflowManager:
             "payables": PayablesWorkflow(),
             "cash_flow": CashFlowWorkflow(),
             "bank_reconciliation": BankReconciliationWorkflow(),
+            "treasury": TreasuryWorkflow(),
             "chat": ChatWorkflow(),
         }
 

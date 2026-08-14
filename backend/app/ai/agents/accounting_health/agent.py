@@ -13,6 +13,7 @@ from app.ai.agents.accounting_health.schemas import (
     AccountingHealthEvidence,
     AccountingHealthReport,
 )
+from app.ai.agents.presentation import priority_actions
 from app.ai.core.base_agent import BaseAgent
 from app.ai.core.base_result import BaseResult
 from app.ai.core.base_task import BaseTask
@@ -408,5 +409,8 @@ class AccountingHealthAgent(BaseAgent):
         if status == "healthy":
             return "La salud contable no presenta alertas que requieran atención."
         if status == "critical":
-            return "La salud contable tiene hallazgos críticos que requieren atención prioritaria."
-        return "La salud contable tiene hallazgos que conviene revisar."
+            return (
+                "La salud contable tiene hallazgos críticos que requieren atención prioritaria. "
+                + priority_actions(report.findings)
+            )
+        return "La salud contable tiene hallazgos que conviene revisar. " + priority_actions(report.findings)

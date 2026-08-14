@@ -14,6 +14,7 @@ from app.ai.agents.receivables.schemas import (
     ReceivablesEvidence,
     ReceivablesReport,
 )
+from app.ai.agents.presentation import priority_actions
 from app.ai.core.base_agent import BaseAgent
 from app.ai.core.base_result import BaseResult
 from app.ai.core.base_task import BaseTask
@@ -782,7 +783,6 @@ class ReceivablesAgent(BaseAgent):
             report.findings,
             key=lambda finding: (severity_order[finding.severity.value], finding.code),
         )
-        highlights = "; ".join(finding.message.rstrip(".") for finding in priorities[:3])
         response = "Prioriza esta revisión: "
         if report.metrics.seriously_overdue_sales_invoices:
             count = report.metrics.seriously_overdue_sales_invoices
@@ -790,9 +790,7 @@ class ReceivablesAgent(BaseAgent):
                 f"{count} {cls._invoice_label(count)} con saldo pendiente supera"
                 f"{'n' if count != 1 else ''} los 90 días de vencimiento. "
             )
-        response += f"Hallazgos activos: {highlights}."
-        if priorities[0].recommendation:
-            response += f" Acción inicial: {priorities[0].recommendation}"
+        response += priority_actions(priorities)
         return cls._answered(
             report,
             response,

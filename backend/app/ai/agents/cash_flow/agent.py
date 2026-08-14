@@ -15,6 +15,7 @@ from app.ai.agents.cash_flow.schemas import (
     CashFlowPeriod,
     CashFlowReport,
 )
+from app.ai.agents.presentation import priority_actions
 from app.ai.core.base_agent import BaseAgent
 from app.ai.core.base_result import BaseResult
 from app.ai.core.base_task import BaseTask
@@ -197,15 +198,11 @@ class CashFlowAgent(BaseAgent):
         elif any(
             term in normalized for term in ("primero", "prior", "alert")
         ):
-            warning_codes = ", ".join(
-                finding.code
-                for finding in report.findings
-                if finding.severity.value == "warning"
-            ) or "ninguna advertencia prioritaria"
             response = (
-                f"La proyección tiene {report.summary.warning_count} advertencias. "
-                f"Prioriza: {warning_codes}. Revisa siempre la certeza de recaudo y la "
-                "disponibilidad bancaria fuera de este reporte."
+                f"La proyección requiere atención en {report.summary.warning_count} "
+                f"aspecto{'s' if report.summary.warning_count != 1 else ''}. "
+                f"{priority_actions(report.findings, severity_values=frozenset({'warning'}))} "
+                "Confirma la certeza de recaudo y la disponibilidad bancaria por fuera de este reporte."
             )
         else:
             response = (

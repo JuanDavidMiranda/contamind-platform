@@ -189,6 +189,29 @@ async def bank_reconciliation_chat(
     )
 
 
+@company_chat_router.post(
+    "/{company_id}/agents/treasury/chat",
+    response_model=CompanyChatResponse,
+)
+async def treasury_chat(
+    company_id: UUID,
+    request: CompanyChatRequest,
+    authorization: str | None = Header(default=None),
+    x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+    db: Session = Depends(get_db),
+):
+    """Conversación autenticada con el diagnóstico de tesorería."""
+
+    return await _process_company_chat(
+        company_id,
+        request,
+        authorization=authorization,
+        x_request_id=x_request_id,
+        db=db,
+        workflow_id="treasury",
+    )
+
+
 @company_chat_router.post("/{company_id}/chat", response_model=CompanyChatResponse)
 async def company_chat(
     company_id: UUID,

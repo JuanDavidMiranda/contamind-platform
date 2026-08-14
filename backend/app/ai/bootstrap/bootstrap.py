@@ -5,6 +5,7 @@ from app.ai.agents.bank_reconciliation import BankReconciliationAgent
 from app.ai.agents.cash_flow import CashFlowAgent
 from app.ai.agents.receivables import ReceivablesAgent
 from app.ai.agents.payables import PayablesAgent
+from app.ai.agents.treasury import TreasuryAgent
 from app.ai.registry import registry as agent_registry
 from app.ai.tools.registry import registry
 
@@ -28,6 +29,8 @@ def bootstrap() -> None:
     logger.info("agent registered", extra={"agent": "cash_flow"})
     agent_registry.register(BankReconciliationAgent())
     logger.info("agent registered", extra={"agent": "bank_reconciliation"})
+    agent_registry.register(TreasuryAgent())
+    logger.info("agent registered", extra={"agent": "treasury"})
     if is_enabled(FEATURE_MOCK_EXTERNAL_SERVICES, default=True):
         registry.register(ConsultarObligacionesTool())
         logger.info(

@@ -218,6 +218,14 @@ Esta primera versión admite CSV normalizado y coincidencias uno a uno. No calcu
 
 Para la revisión local con `contamind-demo.db`, puede cargarse `backend/examples/extracto-bancario-demo.csv`: contiene datos ficticios, una salida que coincide con el pago de compra de demostración y dos movimientos deliberadamente pendientes.
 
+### Agente de tesorería y liquidez
+
+`POST /api/v1/companies/{company_id}/agents/treasury/chat` combina la proyección de facturas abiertas a 30 días (incluidos vencidos) con la calidad de la conciliación bancaria. Presenta entradas, salidas y movimiento neto por moneda, facturas sin vencimiento y señales de conciliación que aún requieren revisión humana.
+
+El agente es determinista y de solo lectura. No muestra documentos, cuentas, extractos, referencias, terceros o pagos individuales; tampoco registra, programa, prioriza ni autoriza pagos o transferencias. Cada consulta conserva sólo metadatos agregados de auditoría en `agent_executions`.
+
+El diagnóstico **no calcula disponibilidad bancaria real ni responde si se puede pagar**: un extracto parcial no demuestra saldo actual y pueden existir obligaciones fuera del modelo. Antes de decidir pagos o financiación se debe contrastar el reporte con un saldo bancario verificado por moneda y completar las diferencias de conciliación. Ver `backend/docs/adr/0022-agente-de-tesoreria-y-liquidez.md`.
+
 #### Capa LLM opcional y activación productiva
 
 Esta capa aplica a los agentes que la integran explícitamente. Las versiones actuales de cuentas por pagar, flujo de caja y conciliación bancaria son deterministas y no llaman al LLM.

@@ -11,6 +11,7 @@ from app.ai.agents.bank_reconciliation.schemas import (
     BankReconciliationConversation,
     BankReconciliationReport,
 )
+from app.ai.agents.presentation import priority_actions
 from app.ai.core.base_agent import BaseAgent
 from app.ai.core.base_result import BaseResult
 from app.ai.core.base_task import BaseTask
@@ -169,15 +170,11 @@ class BankReconciliationAgent(BaseAgent):
             )
             outcome = "answered"
         else:
-            codes = ", ".join(
-                finding.code
-                for finding in report.findings
-                if finding.severity.value == "warning"
-            ) or "ninguna advertencia prioritaria"
             response = (
                 f"La conciliación registra {metrics.imported_transactions} movimientos y "
-                f"{metrics.reconciled_transactions} confirmados. Prioriza: {codes}. "
-                "Revisa siempre las sugerencias en la vista operativa."
+                f"{metrics.reconciled_transactions} confirmados. "
+                f"{priority_actions(report.findings, severity_values=frozenset({'warning'}))} "
+                "Revisa las sugerencias y diferencias en la vista de Conciliación operativa."
             )
             outcome = "answered"
         return BankReconciliationConversation(
