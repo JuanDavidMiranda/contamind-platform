@@ -2,17 +2,19 @@
 
 import { type FormEvent, useState } from "react";
 
-import { ApiError, askBankReconciliation, askCashFlow, askHealth, askPayables, askReceivables, askTreasury, companies, login } from "./api";
+import { ApiError, askBankReconciliation, askCashFlow, askElectronicInvoicing, askHealth, askPayables, askReceivables, askTreasury, companies, login } from "./api";
 import { BankReconciliationOperations } from "./BankReconciliationOperations";
+import { ElectronicInvoicingOperations } from "./ElectronicInvoicingOperations";
 import { ReceivablesOperations } from "./ReceivablesOperations";
 import type { CashFlowAmount, Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
 import "./health-agent.css";
 import "./receivables.css";
 import "./cash-flow.css";
 import "./bank-reconciliation.css";
+import "./electronic-invoicing.css";
 
 type Session = { token: string; userId: number };
-type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "bank-reconciliation" | "treasury";
+type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "electronic-invoicing" | "bank-reconciliation" | "treasury";
 type AgentView = "diagnostic" | "operations";
 type Message = {
   id: string;
@@ -110,6 +112,32 @@ const agentDetails: Record<AgentKey, {
       ["payables_missing_due_date", "Pagos sin fecha"],
       ["currencies", "Monedas"],
       ["horizon_days", "Horizonte (días)"],
+    ],
+  },
+  "electronic-invoicing": {
+    label: "Facturación electrónica",
+    eyebrow: "AGENTE DE FACTURACIÓN ELECTRÓNICA",
+    title: "Revisa la evidencia antes de transmitir.",
+    description: "Analiza los estados electrónicos importados y la calidad de las facturas de venta, sin emitir ni consultar documentos ante la DIAN.",
+    emptyTitle: "¿Qué quieres revisar de facturación electrónica?",
+    emptyDescription: (companyName) => `Revisaré los estados electrónicos disponibles de ${companyName}, sin mostrar facturas ni referencias individuales.`,
+    placeholder: "Pregunta sobre estados, rechazos y trazabilidad electrónica…",
+    fallback: "No fue posible generar el diagnóstico de facturación electrónica.",
+    prompts: [
+      "¿Qué debo revisar primero en facturación electrónica?",
+      "¿Cuántas facturas están pendientes o rechazadas?",
+      "¿Qué datos faltan para tener trazabilidad electrónica?",
+      "¿El aplicativo ya valida documentos ante la DIAN?",
+    ],
+    metrics: [
+      ["sales_invoices", "Facturas de venta"],
+      ["electronic_status_recorded", "Con estado electrónico"],
+      ["accepted_electronic_invoices", "Aceptadas"],
+      ["pending_electronic_invoices", "Pendientes"],
+      ["rejected_electronic_invoices", "Rechazadas o con error"],
+      ["invoices_without_electronic_status", "Sin estado electrónico"],
+      ["invoices_without_electronic_reference", "Sin referencia electrónica"],
+      ["electronic_status_coverage", "Cobertura de estado (%)"],
     ],
   },
   "bank-reconciliation": {
@@ -250,6 +278,8 @@ export function HealthAgentApp() {
             ? await askPayables(session.token, companyId, text, conversationId)
             : activeAgent === "cash-flow"
               ? await askCashFlow(session.token, companyId, text, conversationId)
+              : activeAgent === "electronic-invoicing"
+                ? await askElectronicInvoicing(session.token, companyId, text, conversationId)
               : activeAgent === "bank-reconciliation"
                 ? await askBankReconciliation(session.token, companyId, text, conversationId)
                 : await askTreasury(session.token, companyId, text, conversationId);
@@ -407,10 +437,10 @@ export function HealthAgentApp() {
             <h1>{agent.title}</h1>
           </div>
           <span className="readonly">
-            {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "bank-reconciliation") && agentView === "operations" ? "Gestión controlada" : "Solo lectura"}
+            {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "bank-reconciliation") && agentView === "operations" ? "Gestión controlada" : "Solo lectura"}
           </span>
         </header>
-        {activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "bank-reconciliation" ? (
+        {activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "bank-reconciliation" ? (
           <div className="receivables-tabs" role="tablist" aria-label="Vistas del agente">
             <button
               type="button"
@@ -432,14 +462,24 @@ export function HealthAgentApp() {
                 ? "Cartera operativa"
                 : activeAgent === "payables"
                   ? "Pagos operativos"
+                  : activeAgent === "electronic-invoicing"
+                    ? "Evidencia operativa"
                   : "Conciliación operativa"}
             </button>
           </div>
         ) : null}
-        {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "bank-reconciliation") && agentView === "operations" ? (
+        {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "bank-reconciliation") && agentView === "operations" ? (
           activeAgent === "bank-reconciliation" ? (
             <BankReconciliationOperations
               key={`${companyId}-${session.userId}-bank`}
+              token={session.token}
+              companyId={companyId}
+              companyName={company?.name || "esta empresa"}
+              enabled={Boolean(canUseAgent)}
+            />
+          ) : activeAgent === "electronic-invoicing" ? (
+            <ElectronicInvoicingOperations
+              key={`${companyId}-${session.userId}-electronic`}
               token={session.token}
               companyId={companyId}
               companyName={company?.name || "esta empresa"}
@@ -481,6 +521,13 @@ export function HealthAgentApp() {
             <b>Qué puedes consultar:</b> entradas, salidas, movimiento neto y
             vencimientos por período y moneda. La proyección no incluye saldos
             bancarios ni garantiza que un cobro o pago vaya a ocurrir.
+          </p>
+        ) : null}
+        {activeAgent === "electronic-invoicing" ? (
+          <p id="electronic-invoicing-chat-scope" className="scope-hint">
+            <b>Qué puedes consultar:</b> estados electrónicos importados, rechazos,
+            pendientes, trazabilidad y calidad de datos de forma agregada. El agente no
+            emite, firma, transmite ni consulta documentos ante la DIAN.
           </p>
         ) : null}
         {activeAgent === "bank-reconciliation" ? (
@@ -579,9 +626,11 @@ export function HealthAgentApp() {
                 ? "receivables-chat-scope"
                 : activeAgent === "cash-flow"
                   ? "cash-flow-chat-scope"
-                : activeAgent === "bank-reconciliation"
-                  ? "bank-reconciliation-chat-scope"
-                  : activeAgent === "treasury"
+                  : activeAgent === "bank-reconciliation"
+                    ? "bank-reconciliation-chat-scope"
+                    : activeAgent === "electronic-invoicing"
+                      ? "electronic-invoicing-chat-scope"
+                    : activeAgent === "treasury"
                     ? "treasury-chat-scope"
                   : undefined
             }

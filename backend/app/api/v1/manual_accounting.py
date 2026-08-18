@@ -1,6 +1,6 @@
 """API de captura manual para entidades del núcleo contable."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -62,6 +62,9 @@ class ManualInvoiceCreate(BaseModel):
     withholding_total: Decimal = Field(default=Decimal("0"), ge=0)
     number: str | None = Field(default=None, max_length=100)
     status: str | None = Field(default=None, max_length=50)
+    electronic_status: str | None = Field(default=None, max_length=50)
+    electronic_reference: str | None = Field(default=None, max_length=255)
+    electronic_status_at: datetime | None = None
 
 
 class ManualPaymentCreate(BaseModel):

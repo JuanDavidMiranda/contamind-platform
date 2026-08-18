@@ -31,16 +31,18 @@ test("server-renders the ContaMind sign-in experience", async () => {
 });
 
 test("keeps the accounting-agent contracts and privacy boundary in the client", async () => {
-  const [page, api, layout, component, operations, bankOperations, styles, cashFlowStyles, bankStyles, environment] = await Promise.all([
+  const [page, api, layout, component, operations, bankOperations, electronicOperations, styles, cashFlowStyles, bankStyles, electronicStyles, environment] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/api.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/HealthAgentApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/ReceivablesOperations.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/BankReconciliationOperations.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/health-agent/ElectronicInvoicingOperations.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/health-agent.css", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/cash-flow.css", import.meta.url), "utf8"),
     readFile(new URL("../app/health-agent/bank-reconciliation.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/health-agent/electronic-invoicing.css", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
   ]);
 
@@ -51,11 +53,14 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/receivables\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/payables\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/cash-flow\/chat/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/agents\/electronic-invoicing\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/bank-reconciliation\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/agents\/treasury\/chat/);
   assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/accounts/);
   assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/balance-snapshots/);
   assert.match(api, /\/companies\/\$\{companyId\}\/bank-reconciliation\/transactions/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/electronic-invoicing\/exceptions/);
+  assert.match(api, /\/companies\/\$\{companyId\}\/electronic-invoicing\/imports/);
   assert.match(api, /\/companies\/\$\{companyId\}\/receivables\/open-items/);
   assert.match(api, /\/companies\/\$\{companyId\}\/payables\/open-items/);
   assert.match(api, /\/companies\/\$\{companyId\}\/collection-followups/);
@@ -69,9 +74,11 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(component, /AGENTE DE CARTERA/);
   assert.match(component, /AGENTE DE CUENTAS POR PAGAR/);
   assert.match(component, /AGENTE DE FLUJO DE CAJA/);
+  assert.match(component, /AGENTE DE FACTURACIÓN ELECTRÓNICA/);
   assert.match(component, /AGENTE DE CONCILIACIÓN BANCARIA/);
   assert.match(component, /AGENTE DE TESORERÍA Y LIQUIDEZ/);
   assert.match(component, /BankReconciliationOperations/);
+  assert.match(component, /ElectronicInvoicingOperations/);
   assert.match(component, /ReceivablesOperations/);
   assert.match(component, /Qué puedes consultar:[\s\S]*saldos, vencimientos y antigüedad, pagos/);
   assert.match(component, /seguimientos, promesas y alertas, siempre de forma agregada/);
@@ -79,6 +86,8 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(component, /¿Cómo se distribuye la antigüedad de la cartera\?/);
   assert.match(component, /¿Hay pagos parciales, seguimientos o promesas incumplidas\?/);
   assert.match(component, /cash-flow-chat-scope/);
+  assert.match(component, /electronic-invoicing-chat-scope/);
+  assert.match(component, /no\s+emite, firma, transmite ni consulta documentos ante la DIAN/);
   assert.match(component, /Movimiento neto a 90 días/);
   assert.match(component, /No representa saldo bancario disponible/);
   assert.match(component, /Entradas: \{unsignedAmountsText/);
@@ -111,10 +120,16 @@ test("keeps the accounting-agent contracts and privacy boundary in the client", 
   assert.match(bankOperations, /Cortes bancarios verificados/);
   assert.match(bankOperations, /window\.confirm/);
   assert.match(bankOperations, /window\.confirm[\s\S]*handleReview/);
+  assert.match(electronicOperations, /Evidencia y excepciones/);
+  assert.match(electronicOperations, /La conexión en tiempo real con la DIAN aún no está habilitada/);
+  assert.match(electronicOperations, /no comparte referencias electrónicas ni datos de adquirientes/);
+  assert.match(electronicOperations, /Se conserva el resultado por fila, no el contenido sensible del archivo/);
+  assert.match(electronicStyles, /\.electronic-exception-list/);
   assert.doesNotMatch(component, /localStorage|sessionStorage/);
   assert.doesNotMatch(component, /finding\.code\.replaceAll/);
   assert.doesNotMatch(operations, /localStorage|sessionStorage/);
   assert.doesNotMatch(bankOperations, /localStorage|sessionStorage/);
+  assert.doesNotMatch(electronicOperations, /localStorage|sessionStorage/);
 
   await access(new URL("../public/og-agentes.png", import.meta.url));
 });

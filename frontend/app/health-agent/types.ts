@@ -177,3 +177,53 @@ export type BankBalanceSnapshotsResponse = {
 };
 
 export type BankReviewAction = "confirm" | "dismiss" | "exclude" | "reopen";
+
+export type ElectronicInvoiceEvidenceImportResult = {
+  import_id: string;
+  accepted_rows: number;
+  duplicate_rows: number;
+  rejections: Array<{ row_number: number; message: string }>;
+};
+
+export type ElectronicInvoiceEvidenceImport = {
+  id: string;
+  file_format: "csv" | "xlsx";
+  accepted_rows: number;
+  duplicate_rows: number;
+  rejected_rows: number;
+  created_at: string;
+};
+
+export type ElectronicInvoiceEvidenceImportsResponse = {
+  total: number;
+  can_import: boolean;
+  items: ElectronicInvoiceEvidenceImport[];
+};
+
+export type ElectronicInvoiceEvidenceImportRow = {
+  row_number: number;
+  outcome: "accepted" | "duplicate" | "rejected";
+  reason: string | null;
+  created_at: string;
+};
+
+export type ElectronicInvoiceEvidenceImportRowsResponse = {
+  total: number;
+  items: ElectronicInvoiceEvidenceImportRow[];
+};
+
+export type ElectronicInvoiceException = {
+  invoice_id: string;
+  invoice_number: string | null;
+  issue_date: string;
+  electronic_status: string | null;
+  electronic_status_at: string | null;
+  has_electronic_reference: boolean;
+  issue_codes: string[];
+};
+
+export type ElectronicInvoiceExceptionsResponse = {
+  total: number;
+  can_import: boolean;
+  items: ElectronicInvoiceException[];
+};

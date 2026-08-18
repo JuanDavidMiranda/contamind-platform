@@ -96,3 +96,31 @@ async def test_company_health_session_does_not_retain_the_raw_message_or_entitie
     context = service.sessions.get("company:company-1:user:1:conversation:conversation-1")
     assert context.user_message == ""
     assert context.entities == {}
+
+
+class _ElectronicInvoicingConversationOrchestrator:
+    async def handle_message(self, message, context, **kwargs):
+        context.workflow = "electronic_invoicing"
+        context.user_message = message
+        context.entities = {"document": "900111222"}
+        return BaseResult(success=True, message="ok")
+
+
+@pytest.mark.asyncio
+async def test_company_electronic_invoicing_session_does_not_retain_raw_message_or_entities():
+    service = ChatService()
+    service.orchestrator = _ElectronicInvoicingConversationOrchestrator()
+
+    await service.process_company(
+        "Revisa el NIT 900111222",
+        user_id=1,
+        company_id="company-1",
+        conversation_id="conversation-electronic-invoicing",
+        workflow_id="electronic_invoicing",
+    )
+
+    context = service.sessions.get(
+        "company:company-1:user:1:conversation:conversation-electronic-invoicing"
+    )
+    assert context.user_message == ""
+    assert context.entities == {}

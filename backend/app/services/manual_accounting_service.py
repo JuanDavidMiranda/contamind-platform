@@ -1,6 +1,6 @@
 """Captura manual idempotente del núcleo contable canónico."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID, uuid4
 
@@ -136,6 +136,9 @@ class ManualAccountingService:
         withholding_total: Decimal,
         number: str | None,
         status: str | None,
+        electronic_status: str | None = None,
+        electronic_reference: str | None = None,
+        electronic_status_at: datetime | None = None,
         actor_user_id: int,
         idempotency_key: str,
     ) -> Invoice:
@@ -180,6 +183,9 @@ class ManualAccountingService:
             total=total,
             number=number,
             status=status,
+            electronic_status=electronic_status,
+            electronic_reference=electronic_reference,
+            electronic_status_at=electronic_status_at,
         )
         self._db.add(
             InvoiceRecord(
@@ -201,6 +207,9 @@ class ManualAccountingService:
                 total=invoice.total,
                 number=invoice.number,
                 status=invoice.status,
+                electronic_status=invoice.electronic_status,
+                electronic_reference=invoice.electronic_reference,
+                electronic_status_at=invoice.electronic_status_at,
                 idempotency_key=idempotency_key,
                 created_by_user_id=actor_user_id,
                 updated_by_user_id=actor_user_id,
@@ -471,6 +480,9 @@ class ManualAccountingService:
             total=record.total,
             number=record.number,
             status=record.status,
+            electronic_status=record.electronic_status,
+            electronic_reference=record.electronic_reference,
+            electronic_status_at=record.electronic_status_at,
         )
 
     @staticmethod

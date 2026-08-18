@@ -1,6 +1,6 @@
 """Modelo contable canónico v1, independiente de cualquier proveedor."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 import re
@@ -177,6 +177,9 @@ class Invoice(CanonicalModel):
     total: Decimal = Field(ge=0)
     number: str | None = Field(default=None, max_length=100)
     status: str | None = Field(default=None, max_length=50)
+    electronic_status: str | None = Field(default=None, max_length=50)
+    electronic_reference: str | None = Field(default=None, max_length=255)
+    electronic_status_at: datetime | None = None
     dian_reference: str | None = Field(default=None, max_length=255)
     external_id: str | None = Field(default=None, max_length=255)
 

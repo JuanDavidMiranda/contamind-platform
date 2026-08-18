@@ -128,12 +128,17 @@ def test_operator_captures_accounting_core_idempotently(client):
             ],
             "tax_total": "38",
             "number": "FV-001",
+            "electronic_status": "accepted",
+            "electronic_reference": "referencia-electronica-demo",
+            "electronic_status_at": "2026-08-10T10:30:00",
         },
     )
     assert invoice_response.status_code == 201
     invoice_id = invoice_response.json()["id"]
     assert invoice_response.json()["subtotal"] == "200.00"
     assert invoice_response.json()["total"] == "238.00"
+    assert invoice_response.json()["electronic_status"] == "accepted"
+    assert invoice_response.json()["electronic_reference"] == "referencia-electronica-demo"
 
     payment_response = client.post(
         f"/api/v1/data-sources/{source_id}/manual/payments",

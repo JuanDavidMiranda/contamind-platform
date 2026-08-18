@@ -202,6 +202,18 @@ El endpoint exige una membresía de consulta (`owner`, `admin`, `operator` o `vi
 
 Esta proyección **no es un saldo bancario ni una medición de liquidez real**: no recibe cuentas ni extractos, y un vencimiento no garantiza que el cobro o pago ocurra en esa fecha. Antes de decidir pagos o necesidades de financiación se deben confirmar disponibilidad bancaria, certeza de recaudo y obligaciones fuera del modelo. Ver `backend/docs/adr/0020-agente-de-flujo-de-caja.md`.
 
+### Agente de facturación electrónica
+
+`POST /api/v1/companies/{company_id}/agents/electronic-invoicing/chat` analiza en modo determinista y de solo lectura las facturas de venta y la evidencia electrónica que una fuente autorizada haya importado: estados aceptados, pendientes o rechazados, referencias como CUFE/CUDE, consecutivos, adquiriente, importes y fechas.
+
+El agente solo muestra métricas y hallazgos agregados; no revela facturas, consecutivos, CUFE, CUDE, adquirientes ni otros datos individuales. Tampoco emite, firma, transmite, corrige, anula o reenvía documentos.
+
+Esta versión **no se conecta en tiempo real con la DIAN**. Los campos `electronic_status`, `electronic_reference` y `electronic_status_at` conservan evidencia proveniente de una fuente contable o electrónica autorizada. Por tanto, un estado importado no equivale a una validación en línea con la DIAN. El adaptador DIAN —credenciales de habilitación, certificado, firma XML, envío y consulta de estados— se implementará como una fase posterior. Ver `backend/docs/adr/0024-agente-de-facturacion-electronica.md`.
+
+La pestaña **Evidencia operativa** permite a usuarios `owner`, `admin` u `operator` cargar un CSV UTF-8 o XLSX con `número de factura` y `estado electrónico`; también admite referencia electrónica (CUFE/CUDE) y fecha de respuesta ISO 8601. Solo actualiza facturas de venta existentes de la misma empresa. Las filas idénticas o repetidas se marcan como duplicadas; las inválidas quedan auditadas por número de fila y motivo, sin conservar el contenido sensible cargado. Los usuarios con acceso de lectura pueden consultar excepciones individuales y el resultado de las cargas, pero no importar.
+
+Las rutas operativas son `POST|GET /api/v1/companies/{company_id}/electronic-invoicing/imports`, `GET /api/v1/companies/{company_id}/electronic-invoicing/imports/{import_id}/rows` y `GET /api/v1/companies/{company_id}/electronic-invoicing/exceptions`. La vista individual no devuelve CUFE/CUDE ni datos del adquiriente; el chat conserva únicamente agregados. Ver `backend/docs/adr/0025-importacion-auditable-de-evidencia-electronica.md`.
+
 ### Agente y operación de conciliación bancaria
 
 `POST /api/v1/companies/{company_id}/agents/bank-reconciliation/chat` explica únicamente métricas agregadas de conciliación: movimientos importados, sugerencias por confirmar, pendientes, ambigüedades, cobertura y entradas o salidas separadas por moneda. No devuelve descripciones, referencias, pagos ni cuentas individuales y no confirma decisiones desde el chat.

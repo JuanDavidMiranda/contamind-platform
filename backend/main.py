@@ -10,6 +10,7 @@ from app.models import agent as agent_models  # noqa: F401  (registra modelos pa
 from app.models import bank_reconciliation as bank_reconciliation_models  # noqa: F401
 from app.models import collection_followup as collection_followup_models  # noqa: F401
 from app.models import data_source as data_source_models  # noqa: F401  (registra modelos para create_all)
+from app.models import electronic_invoicing as electronic_invoicing_models  # noqa: F401
 from app.models import organization as organization_models  # noqa: F401  (registra modelos para create_all)
 from app.models import user as user_models  # noqa: F401  (registra modelos para create_all)
 from app.shared.errors import register_exception_handlers

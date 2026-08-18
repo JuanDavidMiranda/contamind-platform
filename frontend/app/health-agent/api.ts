@@ -11,6 +11,10 @@ import type {
   BankTransaction,
   BankTransactionsResponse,
   Company,
+  ElectronicInvoiceEvidenceImportResult,
+  ElectronicInvoiceEvidenceImportRowsResponse,
+  ElectronicInvoiceEvidenceImportsResponse,
+  ElectronicInvoiceExceptionsResponse,
   HealthResponse,
   InvoiceTermsUpdate,
   LoginResult,
@@ -61,6 +65,11 @@ export const askPayables = (token: string, companyId: string, message: string, c
 );
 export const askCashFlow = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
   `/companies/${companyId}/agents/cash-flow/chat`,
+  { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
+  token,
+);
+export const askElectronicInvoicing = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
+  `/companies/${companyId}/agents/electronic-invoicing/chat`,
   { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
   token,
 );
@@ -213,3 +222,52 @@ export const reviewBankTransaction = (
   { method: "PATCH", body: JSON.stringify({ action, confirmed: true }) },
   token,
 );
+
+export const electronicInvoiceExceptions = (
+  token: string,
+  companyId: string,
+  options: { limit?: number; offset?: number } = {},
+) => {
+  const parameters = new URLSearchParams();
+  if (options.limit !== undefined) parameters.set("limit", String(options.limit));
+  if (options.offset !== undefined) parameters.set("offset", String(options.offset));
+  const query = parameters.size ? `?${parameters.toString()}` : "";
+  return request<ElectronicInvoiceExceptionsResponse>(
+    `/companies/${companyId}/electronic-invoicing/exceptions${query}`,
+    {},
+    token,
+  );
+};
+
+export const electronicInvoiceEvidenceImports = (
+  token: string,
+  companyId: string,
+) => request<ElectronicInvoiceEvidenceImportsResponse>(
+  `/companies/${companyId}/electronic-invoicing/imports?limit=20`,
+  {},
+  token,
+);
+
+export const electronicInvoiceEvidenceImportRows = (
+  token: string,
+  companyId: string,
+  importId: string,
+) => request<ElectronicInvoiceEvidenceImportRowsResponse>(
+  `/companies/${companyId}/electronic-invoicing/imports/${importId}/rows?limit=100`,
+  {},
+  token,
+);
+
+export const importElectronicInvoiceEvidence = (
+  token: string,
+  companyId: string,
+  file: File,
+) => {
+  const body = new FormData();
+  body.set("file", file);
+  return request<ElectronicInvoiceEvidenceImportResult>(
+    `/companies/${companyId}/electronic-invoicing/imports`,
+    { method: "POST", body },
+    token,
+  );
+};

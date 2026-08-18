@@ -81,6 +81,8 @@ def test_migrations_apply_on_empty_database():
                     "bank_balance_snapshots",
                     "bank_statement_imports",
                     "bank_transactions",
+                    "electronic_invoice_evidence_imports",
+                    "electronic_invoice_evidence_import_rows",
                 } <= tables
                 version = connection.execute(
                     text("SELECT version_num FROM alembic_version")
