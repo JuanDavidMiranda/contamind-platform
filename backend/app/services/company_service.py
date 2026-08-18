@@ -41,6 +41,7 @@ class CompanyService:
                 country_code=tenant.country_code,
             )
         )
+        self._db.flush()
         self._db.add(
             CompanyRecord(
                 id=str(company.id),

@@ -1,7 +1,7 @@
 """add electronic invoice evidence
 
 Revision ID: b3d5e7f9a1c2
-Revises: a2c4e6f8b0d1
+Revises: a1c4e7f9b2d6
 Create Date: 2026-08-18 09:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "b3d5e7f9a1c2"
-down_revision: Union[str, Sequence[str], None] = "a2c4e6f8b0d1"
+down_revision: Union[str, Sequence[str], None] = "a1c4e7f9b2d6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

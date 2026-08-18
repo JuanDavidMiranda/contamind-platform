@@ -1,7 +1,7 @@
 """add verified bank balance snapshots
 
 Revision ID: a2c4e6f8b0d1
-Revises: f9b2c3d4e5f6
+Revises: c7e1f4a8b2d3
 Create Date: 2026-08-14 10:10:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "a2c4e6f8b0d1"
-down_revision: Union[str, Sequence[str], None] = "f9b2c3d4e5f6"
+down_revision: Union[str, Sequence[str], None] = "c7e1f4a8b2d3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
