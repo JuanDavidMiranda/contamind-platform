@@ -15,6 +15,7 @@ import type {
   ElectronicInvoiceEvidenceImportRowsResponse,
   ElectronicInvoiceEvidenceImportsResponse,
   ElectronicInvoiceExceptionsResponse,
+  ExogenousInformationExceptionsResponse,
   HealthResponse,
   InvoiceTermsUpdate,
   LoginResult,
@@ -70,6 +71,11 @@ export const askCashFlow = (token: string, companyId: string, message: string, c
 );
 export const askElectronicInvoicing = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
   `/companies/${companyId}/agents/electronic-invoicing/chat`,
+  { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
+  token,
+);
+export const askExogenousInformation = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
+  `/companies/${companyId}/agents/exogenous-information/chat`,
   { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
   token,
 );
@@ -268,6 +274,22 @@ export const importElectronicInvoiceEvidence = (
   return request<ElectronicInvoiceEvidenceImportResult>(
     `/companies/${companyId}/electronic-invoicing/imports`,
     { method: "POST", body },
+    token,
+  );
+};
+
+export const exogenousInformationExceptions = (
+  token: string,
+  companyId: string,
+  taxYear: number,
+  options: { limit?: number; offset?: number } = {},
+) => {
+  const parameters = new URLSearchParams({ tax_year: String(taxYear) });
+  if (options.limit !== undefined) parameters.set("limit", String(options.limit));
+  if (options.offset !== undefined) parameters.set("offset", String(options.offset));
+  return request<ExogenousInformationExceptionsResponse>(
+    `/companies/${companyId}/exogenous-information/exceptions?${parameters.toString()}`,
+    {},
     token,
   );
 };

@@ -227,3 +227,17 @@ export type ElectronicInvoiceExceptionsResponse = {
   can_import: boolean;
   items: ElectronicInvoiceException[];
 };
+
+export type ExogenousInformationException = {
+  record_id: string;
+  record_type: "party" | "invoice" | "payment";
+  record_label: string;
+  record_date: string | null;
+  issue_codes: string[];
+};
+
+export type ExogenousInformationExceptionsResponse = {
+  tax_year: number;
+  total: number;
+  items: ExogenousInformationException[];
+};

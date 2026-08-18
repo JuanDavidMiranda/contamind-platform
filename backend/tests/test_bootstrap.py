@@ -15,3 +15,4 @@ def test_bootstrap_registers_mock_tool():
     assert "MOCK" in tool.description
     assert agent_registry.exists("accounting_health")
     assert agent_registry.exists("electronic_invoicing")
+    assert agent_registry.exists("exogenous_information")

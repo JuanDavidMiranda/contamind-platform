@@ -124,3 +124,31 @@ async def test_company_electronic_invoicing_session_does_not_retain_raw_message_
     )
     assert context.user_message == ""
     assert context.entities == {}
+
+
+class _ExogenousInformationConversationOrchestrator:
+    async def handle_message(self, message, context, **kwargs):
+        context.workflow = "exogenous_information"
+        context.user_message = message
+        context.entities = {"document": "900111222"}
+        return BaseResult(success=True, message="ok")
+
+
+@pytest.mark.asyncio
+async def test_company_exogenous_information_session_does_not_retain_raw_message_or_entities():
+    service = ChatService()
+    service.orchestrator = _ExogenousInformationConversationOrchestrator()
+
+    await service.process_company(
+        "Revisa el NIT 900111222 para exógena",
+        user_id=1,
+        company_id="company-1",
+        conversation_id="conversation-exogenous-information",
+        workflow_id="exogenous_information",
+    )
+
+    context = service.sessions.get(
+        "company:company-1:user:1:conversation:conversation-exogenous-information"
+    )
+    assert context.user_message == ""
+    assert context.entities == {}

@@ -190,6 +190,29 @@ async def electronic_invoicing_chat(
 
 
 @company_chat_router.post(
+    "/{company_id}/agents/exogenous-information/chat",
+    response_model=CompanyChatResponse,
+)
+async def exogenous_information_chat(
+    company_id: UUID,
+    request: CompanyChatRequest,
+    authorization: str | None = Header(default=None),
+    x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+    db: Session = Depends(get_db),
+):
+    """Conversación autenticada con el diagnóstico de información exógena."""
+
+    return await _process_company_chat(
+        company_id,
+        request,
+        authorization=authorization,
+        x_request_id=x_request_id,
+        db=db,
+        workflow_id="exogenous_information",
+    )
+
+
+@company_chat_router.post(
     "/{company_id}/agents/bank-reconciliation/chat",
     response_model=CompanyChatResponse,
 )

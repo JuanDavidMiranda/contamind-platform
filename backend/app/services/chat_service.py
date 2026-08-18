@@ -63,6 +63,7 @@ class ChatService:
                 "payables",
                 "cash_flow",
                 "electronic_invoicing",
+                "exogenous_information",
                 "bank_reconciliation",
             }:
                 # El agente conserva solo el historial ya sanitizado; no dejamos

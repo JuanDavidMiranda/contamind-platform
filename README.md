@@ -214,6 +214,12 @@ La pestaña **Evidencia operativa** permite a usuarios `owner`, `admin` u `opera
 
 Las rutas operativas son `POST|GET /api/v1/companies/{company_id}/electronic-invoicing/imports`, `GET /api/v1/companies/{company_id}/electronic-invoicing/imports/{import_id}/rows` y `GET /api/v1/companies/{company_id}/electronic-invoicing/exceptions`. La vista individual no devuelve CUFE/CUDE ni datos del adquiriente; el chat conserva únicamente agregados. Ver `backend/docs/adr/0025-importacion-auditable-de-evidencia-electronica.md`.
 
+### Agente de información exógena
+
+`POST /api/v1/companies/{company_id}/agents/exogenous-information/chat` revisa de forma determinista la preparación de datos de terceros, facturas y pagos para el año gravable consultado. Señala identificación, ciudad o dirección incompletas en terceros; consecutivos, contrapartes y totales inconsistentes en facturas; y pagos sin factura vinculada. El chat solo expone métricas y hallazgos agregados.
+
+La pestaña **Preparación operativa** consulta `GET /api/v1/companies/{company_id}/exogenous-information/exceptions?tax_year=AAAA` para que usuarios autorizados revisen los casos individuales sin revelar nombres, documentos, importes ni datos de contacto. Esta primera versión **no determina** obligación de reporte, formatos, conceptos, plazos o reglas vigentes de la DIAN; tampoco genera, firma, transmite ni presenta archivos de información exógena. Ver `backend/docs/adr/0026-agente-de-informacion-exogena.md`.
+
 ### Agente y operación de conciliación bancaria
 
 `POST /api/v1/companies/{company_id}/agents/bank-reconciliation/chat` explica únicamente métricas agregadas de conciliación: movimientos importados, sugerencias por confirmar, pendientes, ambigüedades, cobertura y entradas o salidas separadas por moneda. No devuelve descripciones, referencias, pagos ni cuentas individuales y no confirma decisiones desde el chat.

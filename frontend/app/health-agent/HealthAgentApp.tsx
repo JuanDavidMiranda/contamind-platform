@@ -2,9 +2,10 @@
 
 import { type FormEvent, useState } from "react";
 
-import { ApiError, askBankReconciliation, askCashFlow, askElectronicInvoicing, askHealth, askPayables, askReceivables, askTreasury, companies, login } from "./api";
+import { ApiError, askBankReconciliation, askCashFlow, askElectronicInvoicing, askExogenousInformation, askHealth, askPayables, askReceivables, askTreasury, companies, login } from "./api";
 import { BankReconciliationOperations } from "./BankReconciliationOperations";
 import { ElectronicInvoicingOperations } from "./ElectronicInvoicingOperations";
+import { ExogenousInformationOperations } from "./ExogenousInformationOperations";
 import { ReceivablesOperations } from "./ReceivablesOperations";
 import type { CashFlowAmount, Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
 import "./health-agent.css";
@@ -12,9 +13,10 @@ import "./receivables.css";
 import "./cash-flow.css";
 import "./bank-reconciliation.css";
 import "./electronic-invoicing.css";
+import "./exogenous-information.css";
 
 type Session = { token: string; userId: number };
-type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "electronic-invoicing" | "bank-reconciliation" | "treasury";
+type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "electronic-invoicing" | "exogenous-information" | "bank-reconciliation" | "treasury";
 type AgentView = "diagnostic" | "operations";
 type Message = {
   id: string;
@@ -138,6 +140,32 @@ const agentDetails: Record<AgentKey, {
       ["invoices_without_electronic_status", "Sin estado electrónico"],
       ["invoices_without_electronic_reference", "Sin referencia electrónica"],
       ["electronic_status_coverage", "Cobertura de estado (%)"],
+    ],
+  },
+  "exogenous-information": {
+    label: "Información exógena",
+    eyebrow: "AGENTE DE INFORMACIÓN EXÓGENA",
+    title: "Prepara los datos antes de consolidar.",
+    description: "Revisa la calidad de terceros, facturas y pagos por año gravable, sin definir obligaciones ni generar archivos oficiales para la DIAN.",
+    emptyTitle: "¿Qué quieres revisar para información exógena?",
+    emptyDescription: (companyName) => `Revisaré la preparación de datos disponible de ${companyName} sin mostrar terceros, facturas ni pagos individuales en el chat.`,
+    placeholder: "Pregunta sobre preparación, terceros y trazabilidad…",
+    fallback: "No fue posible generar el diagnóstico de información exógena.",
+    prompts: [
+      "¿Qué debo revisar primero para información exógena?",
+      "¿Qué datos faltan en los terceros?",
+      "¿Qué facturas o pagos requieren trazabilidad?",
+      "¿El aplicativo ya genera archivos para la DIAN?",
+    ],
+    metrics: [
+      ["tax_year", "Año gravable"],
+      ["registered_parties", "Terceros"],
+      ["party_identification_coverage", "Cobertura de identificación (%)"],
+      ["parties_missing_document_number", "Sin número de documento"],
+      ["invoices_in_tax_year", "Facturas del año"],
+      ["invoices_missing_counterparty", "Facturas sin contraparte"],
+      ["payments_in_tax_year", "Pagos del año"],
+      ["payments_without_invoice", "Pagos sin factura"],
     ],
   },
   "bank-reconciliation": {
@@ -280,6 +308,8 @@ export function HealthAgentApp() {
               ? await askCashFlow(session.token, companyId, text, conversationId)
               : activeAgent === "electronic-invoicing"
                 ? await askElectronicInvoicing(session.token, companyId, text, conversationId)
+              : activeAgent === "exogenous-information"
+                ? await askExogenousInformation(session.token, companyId, text, conversationId)
               : activeAgent === "bank-reconciliation"
                 ? await askBankReconciliation(session.token, companyId, text, conversationId)
                 : await askTreasury(session.token, companyId, text, conversationId);
@@ -437,10 +467,10 @@ export function HealthAgentApp() {
             <h1>{agent.title}</h1>
           </div>
           <span className="readonly">
-            {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "bank-reconciliation") && agentView === "operations" ? "Gestión controlada" : "Solo lectura"}
+            {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation") && agentView === "operations" ? "Gestión controlada" : "Solo lectura"}
           </span>
         </header>
-        {activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "bank-reconciliation" ? (
+        {activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation" ? (
           <div className="receivables-tabs" role="tablist" aria-label="Vistas del agente">
             <button
               type="button"
@@ -464,11 +494,13 @@ export function HealthAgentApp() {
                   ? "Pagos operativos"
                   : activeAgent === "electronic-invoicing"
                     ? "Evidencia operativa"
+                  : activeAgent === "exogenous-information"
+                    ? "Preparación operativa"
                   : "Conciliación operativa"}
             </button>
           </div>
         ) : null}
-        {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "bank-reconciliation") && agentView === "operations" ? (
+        {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation") && agentView === "operations" ? (
           activeAgent === "bank-reconciliation" ? (
             <BankReconciliationOperations
               key={`${companyId}-${session.userId}-bank`}
@@ -480,6 +512,14 @@ export function HealthAgentApp() {
           ) : activeAgent === "electronic-invoicing" ? (
             <ElectronicInvoicingOperations
               key={`${companyId}-${session.userId}-electronic`}
+              token={session.token}
+              companyId={companyId}
+              companyName={company?.name || "esta empresa"}
+              enabled={Boolean(canUseAgent)}
+            />
+          ) : activeAgent === "exogenous-information" ? (
+            <ExogenousInformationOperations
+              key={`${companyId}-${session.userId}-exogenous`}
               token={session.token}
               companyId={companyId}
               companyName={company?.name || "esta empresa"}
@@ -528,6 +568,15 @@ export function HealthAgentApp() {
             <b>Qué puedes consultar:</b> estados electrónicos importados, rechazos,
             pendientes, trazabilidad y calidad de datos de forma agregada. El agente no
             emite, firma, transmite ni consulta documentos ante la DIAN.
+          </p>
+        ) : null}
+        {activeAgent === "exogenous-information" ? (
+          <p id="exogenous-information-chat-scope" className="scope-hint">
+            <b>Qué puedes consultar:</b> preparación agregada de terceros, facturas y pagos
+            por año gravable. Para revisar casos individuales, usa{" "}
+            <button type="button" className="scope-link" onClick={() => setAgentView("operations")}>
+              Preparación operativa
+            </button>. El agente no determina obligación, formatos ni fechas DIAN, y no genera archivos oficiales.
           </p>
         ) : null}
         {activeAgent === "bank-reconciliation" ? (

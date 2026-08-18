@@ -3,6 +3,7 @@ from app.ai.workflows.accounting_health.workflow import AccountingHealthWorkflow
 from app.ai.workflows.bank_reconciliation.workflow import BankReconciliationWorkflow
 from app.ai.workflows.cash_flow.workflow import CashFlowWorkflow
 from app.ai.workflows.electronic_invoicing.workflow import ElectronicInvoicingWorkflow
+from app.ai.workflows.exogenous_information.workflow import ExogenousInformationWorkflow
 from app.ai.workflows.receivables.workflow import ReceivablesWorkflow
 from app.ai.workflows.payables.workflow import PayablesWorkflow
 from app.ai.workflows.treasury.workflow import TreasuryWorkflow
@@ -20,6 +21,7 @@ class WorkflowManager:
             "payables": PayablesWorkflow(),
             "cash_flow": CashFlowWorkflow(),
             "electronic_invoicing": ElectronicInvoicingWorkflow(),
+            "exogenous_information": ExogenousInformationWorkflow(),
             "bank_reconciliation": BankReconciliationWorkflow(),
             "treasury": TreasuryWorkflow(),
             "chat": ChatWorkflow(),

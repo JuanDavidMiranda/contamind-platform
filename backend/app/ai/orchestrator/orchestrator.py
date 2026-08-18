@@ -47,6 +47,7 @@ class Orchestrator:
                 "payables",
                 "cash_flow",
                 "electronic_invoicing",
+                "exogenous_information",
                 "bank_reconciliation",
             }
             else self.extractor.extract(message)

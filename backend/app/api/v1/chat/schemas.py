@@ -11,6 +11,10 @@ from app.ai.agents.electronic_invoicing.schemas import (
     ElectronicInvoicingConversation,
     ElectronicInvoicingReport,
 )
+from app.ai.agents.exogenous_information.schemas import (
+    ExogenousInformationConversation,
+    ExogenousInformationReport,
+)
 from app.ai.agents.treasury.schemas import TreasuryConversation, TreasuryReport
 from app.ai.agents.bank_reconciliation.schemas import (
     BankReconciliationConversation,
@@ -53,6 +57,7 @@ class CompanyChatResponse(BaseModel):
         | PayablesReport
         | CashFlowReport
         | ElectronicInvoicingReport
+        | ExogenousInformationReport
         | BankReconciliationReport
         | TreasuryReport
         | None
@@ -63,6 +68,7 @@ class CompanyChatResponse(BaseModel):
         | PayablesConversation
         | CashFlowConversation
         | ElectronicInvoicingConversation
+        | ExogenousInformationConversation
         | BankReconciliationConversation
         | TreasuryConversation
         | None
