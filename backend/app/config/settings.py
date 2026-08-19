@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     AUTH_TOKEN_TTL_MINUTES: int = 480
     PLATFORM_ADMIN_EMAILS: str = ""
     FEATURE_FLAGS: dict[str, bool] = {}
+    DIAN_ACQUIRER_URL: str | None = None
     OPENAI_API_KEY: SecretStr | None = None
     OPENAI_MODEL: str = "gpt-5.6-terra"
     OPENAI_TIMEOUT_SECONDS: float = Field(default=20, ge=1, le=120)

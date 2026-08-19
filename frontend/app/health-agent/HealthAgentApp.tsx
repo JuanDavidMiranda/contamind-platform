@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 
 import { ApiError, askBankReconciliation, askCashFlow, askElectronicInvoicing, askExogenousInformation, askHealth, askPayables, askReceivables, askTreasury, companies, login } from "./api";
 import { BankReconciliationOperations } from "./BankReconciliationOperations";
+import { DianConfigurationOperations } from "./DianConfigurationOperations";
 import { ElectronicInvoicingOperations } from "./ElectronicInvoicingOperations";
 import { ExogenousInformationOperations } from "./ExogenousInformationOperations";
 import { ReceivablesOperations } from "./ReceivablesOperations";
@@ -14,10 +15,11 @@ import "./cash-flow.css";
 import "./bank-reconciliation.css";
 import "./electronic-invoicing.css";
 import "./exogenous-information.css";
+import "./dian-configuration.css";
 
 type Session = { token: string; userId: number };
 type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "electronic-invoicing" | "exogenous-information" | "bank-reconciliation" | "treasury";
-type AgentView = "diagnostic" | "operations";
+type AgentView = "diagnostic" | "operations" | "dian";
 type Message = {
   id: string;
   role: "user" | "assistant";
@@ -243,6 +245,9 @@ export function HealthAgentApp() {
   const company = availableCompanies.find((item) => item.id === companyId);
   const canUseAgent = company?.status === "active";
   const agent = agentDetails[activeAgent];
+  const hasOperationalView = activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation";
+  const showingDianConfiguration = activeAgent === "electronic-invoicing" && agentView === "dian";
+  const showingOperations = (hasOperationalView && agentView === "operations") || showingDianConfiguration;
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -467,10 +472,10 @@ export function HealthAgentApp() {
             <h1>{agent.title}</h1>
           </div>
           <span className="readonly">
-            {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation") && agentView === "operations" ? "Gestión controlada" : "Solo lectura"}
+            {showingOperations ? "Gestión controlada" : "Solo lectura"}
           </span>
         </header>
-        {activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation" ? (
+        {hasOperationalView ? (
           <div className="receivables-tabs" role="tablist" aria-label="Vistas del agente">
             <button
               type="button"
@@ -498,10 +503,28 @@ export function HealthAgentApp() {
                     ? "Preparación operativa"
                   : "Conciliación operativa"}
             </button>
+            {activeAgent === "electronic-invoicing" ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={agentView === "dian"}
+                className={agentView === "dian" ? "active" : undefined}
+                onClick={() => setAgentView("dian")}
+              >
+                Configuración DIAN
+              </button>
+            ) : null}
           </div>
         ) : null}
-        {(activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation") && agentView === "operations" ? (
-          activeAgent === "bank-reconciliation" ? (
+        {showingOperations ? (
+          showingDianConfiguration ? (
+            <DianConfigurationOperations
+              key={`${companyId}-${session.userId}-dian`}
+              token={session.token}
+              company={company}
+              enabled={Boolean(canUseAgent)}
+            />
+          ) : activeAgent === "bank-reconciliation" ? (
             <BankReconciliationOperations
               key={`${companyId}-${session.userId}-bank`}
               token={session.token}
@@ -567,7 +590,11 @@ export function HealthAgentApp() {
           <p id="electronic-invoicing-chat-scope" className="scope-hint">
             <b>Qué puedes consultar:</b> estados electrónicos importados, rechazos,
             pendientes, trazabilidad y calidad de datos de forma agregada. El agente no
-            emite, firma, transmite ni consulta documentos ante la DIAN.
+            emite, firma, transmite ni consulta documentos ante la DIAN. Para preparar
+            una consulta individual de adquiriente, usa{" "}
+            <button type="button" className="scope-link" onClick={() => setAgentView("dian")}>
+              Configuración DIAN
+            </button>.
           </p>
         ) : null}
         {activeAgent === "exogenous-information" ? (

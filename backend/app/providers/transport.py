@@ -45,6 +45,7 @@ class ProviderHttpClient:
         headers: Mapping[str, str] | None = None,
         params: Mapping[str, str] | None = None,
         json: Any = None,
+        content: bytes | str | None = None,
     ) -> httpx.Response:
         """Ejecuta una solicitud y traduce fallos sin filtrar datos sensibles."""
         if self._rate_limiter is not None:
@@ -59,6 +60,7 @@ class ProviderHttpClient:
                     headers=headers,
                     params=params,
                     json=json,
+                    content=content,
                 )
             except httpx.RequestError as exc:
                 if attempt < self._retries:

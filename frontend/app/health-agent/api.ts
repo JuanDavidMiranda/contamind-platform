@@ -2,6 +2,8 @@ import type {
   CollectionFollowUp,
   CollectionFollowUpCreate,
   CollectionFollowUpUpdate,
+  DataSource,
+  DianAcquirerLookupsResponse,
   BankAccount,
   BankAccountsResponse,
   BankBalanceSnapshot,
@@ -20,6 +22,7 @@ import type {
   InvoiceTermsUpdate,
   LoginResult,
   OpenReceivablesResponse,
+  ProviderCredentialsResponse,
 } from "./types";
 
 const baseUrl = () => (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
@@ -293,3 +296,64 @@ export const exogenousInformationExceptions = (
     token,
   );
 };
+
+export const dataSources = (token: string, companyId: string) => request<DataSource[]>(
+  `/data-sources?company_id=${encodeURIComponent(companyId)}`,
+  {},
+  token,
+);
+
+export const createDianDataSource = (token: string, company: Company) => request<DataSource>(
+  "/data-sources",
+  {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: company.tenant_id,
+      company_id: company.id,
+      connector_id: "dian_get_acquirer",
+      display_name: "DIAN · Consulta de adquirientes",
+      kind: "fiscal_authority",
+      mode: "fiscal_service",
+      provider_id: "dian",
+    }),
+  },
+  token,
+);
+
+export const saveDianCredentials = (
+  token: string,
+  dataSourceId: string,
+  credentials: Record<string, string>,
+) => request<ProviderCredentialsResponse>(
+  `/data-sources/${dataSourceId}/credentials`,
+  { method: "PUT", body: JSON.stringify({ credentials }) },
+  token,
+);
+
+export const revokeDianCredentials = (token: string, dataSourceId: string) => request<void>(
+  `/data-sources/${dataSourceId}/credentials`,
+  { method: "DELETE" },
+  token,
+);
+
+export const lookupDianAcquirer = (
+  token: string,
+  companyId: string,
+  payload: {
+    data_source_id: string;
+    document_type: string;
+    document_number: string;
+    purpose: "electronic_invoice_issuance";
+    confirmed: true;
+  },
+) => request<DianAcquirer>(
+  `/companies/${companyId}/dian/acquirers/lookup`,
+  { method: "POST", body: JSON.stringify(payload) },
+  token,
+);
+
+export const dianAcquirerLookups = (token: string, companyId: string) => request<DianAcquirerLookupsResponse>(
+  `/companies/${companyId}/dian/acquirers/lookups?limit=20`,
+  {},
+  token,
+);

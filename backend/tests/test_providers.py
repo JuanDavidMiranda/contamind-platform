@@ -49,7 +49,7 @@ class _FiscalStub(FiscalProviderPort):
     provider = ProviderKind.DIAN
     canonical_version = CANONICAL_VERSION
 
-    async def get_acquirer_information(self, context, document_type, document_number):
+    async def get_acquirer_information(self, context, secret, document_type, document_number):
         return Party(company_id=context.company_id, party_type=PartyType.CUSTOMER, name="Demo")
 
 

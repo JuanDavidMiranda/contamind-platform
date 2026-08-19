@@ -1,6 +1,7 @@
 """Registro de adaptadores habilitables para los casos de uso de conexiones."""
 
 from app.config.features import is_provider_enabled
+from app.providers.dian import DianAcquirerAdapter
 from app.providers.factory import ProviderFactory
 from app.providers.siigo import SiigoProviderAdapter
 
@@ -15,4 +16,5 @@ def default_provider_factory() -> ProviderFactory:
 
     factory = ProviderFactory(feature_checker=is_provider_enabled)
     factory.register(SiigoProviderAdapter())
+    factory.register(DianAcquirerAdapter())
     return factory

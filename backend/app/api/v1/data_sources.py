@@ -87,6 +87,8 @@ class ManualPartyCreate(BaseModel):
 
 
 _CREDENTIAL_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_DEFAULT_CREDENTIAL_MAX_LENGTH = 4_096
+_CERTIFICATE_PFX_MAX_LENGTH = 1_000_000
 
 
 class ProviderCredentialsWrite(BaseModel):
@@ -98,7 +100,8 @@ class ProviderCredentialsWrite(BaseModel):
         if any(
             not _CREDENTIAL_KEY_PATTERN.fullmatch(key)
             or not secret.get_secret_value()
-            or len(secret.get_secret_value()) > 4096
+            or len(secret.get_secret_value())
+            > (_CERTIFICATE_PFX_MAX_LENGTH if key == "certificate_pfx_base64" else _DEFAULT_CREDENTIAL_MAX_LENGTH)
             for key, secret in value.items()
         ):
             raise ValueError("Las credenciales contienen un campo no válido.")

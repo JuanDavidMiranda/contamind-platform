@@ -1,4 +1,4 @@
-export type Company = { id: string; name: string; status: "active" | "disabled"; functional_currency: string };
+export type Company = { id: string; tenant_id: string; name: string; status: "active" | "disabled"; functional_currency: string };
 export type LoginResult = { access_token: string; token_type: "bearer"; user_id: number; is_platform_admin: boolean };
 export type Finding = { code: string; severity: "critical" | "warning" | "info"; message: string; evidence: Record<string, number>; recommendation: string };
 export type ReceivablesBalance = { currency_code: string; amount: string };
@@ -240,4 +240,50 @@ export type ExogenousInformationExceptionsResponse = {
   tax_year: number;
   total: number;
   items: ExogenousInformationException[];
+};
+
+export type DataSource = {
+  id: string;
+  tenant_id: string;
+  company_id: string;
+  connector_id: string;
+  display_name: string;
+  kind: "accounting_software" | "file_import" | "database_connection" | "manual_entry" | "fiscal_authority";
+  mode: "cloud_api" | "file_upload" | "local_agent" | "database_connector" | "manual" | "fiscal_service";
+  capabilities: string[];
+  provider_id: string | null;
+  credential_reference: string | null;
+  status: "pending" | "active" | "failed" | "disabled";
+  last_connection_checked_at: string | null;
+  last_synced_at: string | null;
+  last_sync_cursor: string | null;
+};
+
+export type ProviderCredentialsResponse = {
+  data_source_id: string;
+  provider_id: string;
+  status: "pending" | "active" | "failed" | "disabled";
+  credential_configured: true;
+};
+
+export type DianAcquirerLookup = {
+  lookup_id: string;
+  name: string;
+  email: string | null;
+  purpose: "electronic_invoice_issuance";
+};
+
+export type DianAcquirerLookupAudit = {
+  id: string;
+  data_source_id: string;
+  document_type: string;
+  status: "succeeded" | "failed";
+  error_code: string | null;
+  correlation_id: string | null;
+  requested_at: string;
+};
+
+export type DianAcquirerLookupsResponse = {
+  total: number;
+  items: DianAcquirerLookupAudit[];
 };

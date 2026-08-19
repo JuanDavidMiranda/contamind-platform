@@ -10,6 +10,7 @@ from app.database import Base
 import app.models.user  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.agent  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.data_source  # noqa: F401  (registra modelos en Base.metadata)
+import app.models.dian  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.organization  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.accounting  # noqa: F401  (registra modelos en Base.metadata)
 import app.models.collection_followup  # noqa: F401  (registra modelos en Base.metadata)

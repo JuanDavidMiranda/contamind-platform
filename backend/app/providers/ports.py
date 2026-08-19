@@ -83,7 +83,8 @@ class FiscalProviderPort(ProviderPort):
     async def get_acquirer_information(
         self,
         context: ProviderContext,
+        secret: ProviderSecret,
         document_type: str,
         document_number: str,
     ) -> Party:
-        """Consulta información de adquiriente permitida por la autoridad fiscal."""
+        """Consulta información permitida del adquiriente, con credenciales por empresa."""
