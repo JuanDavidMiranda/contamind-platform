@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.models.user import User
 from app.shared.errors import app_error
+
+
 def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
@@ -41,6 +43,28 @@ def verify_password(password: str, stored_value: str) -> bool:
         return False
 
 
+def validate_new_password(password: str) -> str:
+    """Valida contraseñas creadas o rotadas desde los flujos de beta.
+
+    La verificación de inicio de sesión conserva compatibilidad con usuarios
+    históricos. Las contraseñas nuevas, en cambio, deben ser suficientemente
+    robustas para que una clave temporal no se convierta en una vía de acceso
+    trivial al espacio contable de un cliente.
+    """
+
+    if len(password) < 12 or len(password) > 128:
+        raise ValueError("La contraseña debe tener entre 12 y 128 caracteres.")
+    if password != password.strip():
+        raise ValueError("La contraseña no puede iniciar ni terminar con espacios.")
+    if not any(character.islower() for character in password):
+        raise ValueError("La contraseña debe incluir una letra minúscula.")
+    if not any(character.isupper() for character in password):
+        raise ValueError("La contraseña debe incluir una letra mayúscula.")
+    if not any(character.isdigit() for character in password):
+        raise ValueError("La contraseña debe incluir un número.")
+    return password
+
+
 def create_access_token(user: User) -> str:
     header = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
     payload = _b64(
@@ -49,6 +73,7 @@ def create_access_token(user: User) -> str:
                 "sub": str(user.id),
                 "email": user.email,
                 "admin": user.is_platform_admin,
+                "ver": user.token_version,
                 "exp": int(
                     (datetime.now(timezone.utc) + timedelta(minutes=settings.AUTH_TOKEN_TTL_MINUTES)).timestamp()
                 ),
@@ -62,7 +87,12 @@ def create_access_token(user: User) -> str:
     return header + "." + payload + "." + signature
 
 
-def get_current_user(authorization: str | None, db: Session) -> User:
+def get_current_user(
+    authorization: str | None,
+    db: Session,
+    *,
+    allow_password_change: bool = False,
+) -> User:
     if not authorization or not authorization.startswith("Bearer "):
         raise app_error("AUTH_MISSING_TOKEN")
 
@@ -82,4 +112,8 @@ def get_current_user(authorization: str | None, db: Session) -> User:
 
     if user is None:
         raise app_error("AUTH_INVALID_TOKEN", message="Usuario no encontrado.")
+    if claims.get("ver") != user.token_version:
+        raise app_error("AUTH_INVALID_TOKEN", message="La sesión ya no es válida.")
+    if user.requires_password_change and not allow_password_change:
+        raise app_error("AUTH_PASSWORD_CHANGE_REQUIRED")
     return user

@@ -51,6 +51,13 @@ const documentTypes = [
   ["91", "NUI"],
 ] as const;
 
+const isDianAcquirerPilotSource = (source: DataSource) => (
+  source.connector_id === "dian_get_acquirer"
+  && source.provider_id === "dian"
+  && source.kind === "fiscal_authority"
+  && source.mode === "fiscal_service"
+);
+
 export function DianConfigurationOperations({ token, company, enabled }: Props) {
   const [sources, setSources] = useState<DataSource[]>([]);
   const [audits, setAudits] = useState<DianAcquirerLookupAudit[]>([]);
@@ -61,9 +68,7 @@ export function DianConfigurationOperations({ token, company, enabled }: Props) 
   const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<DianAcquirerLookup | null>(null);
 
-  const dianSources = sources.filter((source) => (
-    source.provider_id === "dian" && source.kind === "fiscal_authority" && source.mode === "fiscal_service"
-  ));
+  const dianSources = sources.filter(isDianAcquirerPilotSource);
   const selectedSource = dianSources.find((source) => source.id === selectedSourceId) || dianSources[0];
 
   const load = useCallback(async () => {
@@ -81,9 +86,7 @@ export function DianConfigurationOperations({ token, company, enabled }: Props) 
         dataSources(token, company.id),
         dianAcquirerLookups(token, company.id),
       ]);
-      const nextDianSources = sourceList.filter((source) => (
-        source.provider_id === "dian" && source.kind === "fiscal_authority" && source.mode === "fiscal_service"
-      ));
+      const nextDianSources = sourceList.filter(isDianAcquirerPilotSource);
       setSources(sourceList);
       setAudits(auditList.items);
       setAuditTotal(auditList.total);
@@ -116,6 +119,7 @@ export function DianConfigurationOperations({ token, company, enabled }: Props) 
   }
 
   async function createSource() {
+    if (!company) return;
     setError(null);
     setNotice(null);
     try {
@@ -143,9 +147,9 @@ export function DianConfigurationOperations({ token, company, enabled }: Props) 
     <section className="dian-operations" aria-labelledby="dian-operations-title">
       <header className="operations-heading">
         <div>
-          <p className="eyebrow">CONFIGURACIÓN DIAN</p>
+          <p className="eyebrow">PILOTO DIAN · CONSULTA INDIVIDUAL</p>
           <h2 id="dian-operations-title">Consulta de adquirientes</h2>
-          <p>Prepara la empresa para completar nombre y correo al expedir una factura electrónica.</p>
+          <p>Completa nombre y correo durante la expedición. Esta fuente no se reutiliza para la habilitación de software propio.</p>
         </div>
         <button className="quiet-button" type="button" onClick={() => void load()} disabled={loading}>
           {loading ? "Actualizando…" : "Actualizar"}
@@ -153,7 +157,7 @@ export function DianConfigurationOperations({ token, company, enabled }: Props) 
       </header>
 
       <p className="operations-privacy">
-        Esta configuración no se comparte con el asistente. Los secretos se cifran por empresa y la consulta está limitada a una factura a la vez.
+        Esta configuración no se comparte con el asistente. Los secretos se cifran por empresa y la consulta está limitada a una factura a la vez. No transmite documentos ni activa producción.
       </p>
 
       {error ? <p className="operations-error" role="alert">{error}</p> : null}
@@ -163,7 +167,7 @@ export function DianConfigurationOperations({ token, company, enabled }: Props) 
       {!loading && !dianSources.length ? (
         <section className="dian-empty">
           <h3>Primero registra la fuente DIAN</h3>
-          <p>Solo un propietario o administrador puede crearla. Después podrás cargar los secretos de habilitación o producción.</p>
+          <p>Solo un propietario o administrador puede crearla. Esta fuente solo sirve para el piloto de consulta y no habilita la emisión ni producción.</p>
           <button className="secondary-action" type="button" onClick={() => void createSource()}>
             Crear fuente DIAN
           </button>

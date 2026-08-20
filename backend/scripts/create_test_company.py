@@ -5,7 +5,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import psycopg2
-from app.shared.security import hash_password
 
 conn = psycopg2.connect(
     host="localhost", port=5433,

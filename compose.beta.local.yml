@@ -1,0 +1,131 @@
+name: contamind-beta-local
+
+x-backend-image: &backend-image
+  image: contamind-beta-backend:local
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+
+x-backend-environment: &backend-environment
+  env_file:
+    - ${BETA_ENV_FILE:-./deploy/beta/beta.env}
+  environment:
+    AUTH_SECRET_KEY: "${AUTH_SECRET_KEY:?Define AUTH_SECRET_KEY en deploy/beta/beta.env}"
+    PROVIDER_CREDENTIALS_MASTER_KEY: "${PROVIDER_CREDENTIALS_MASTER_KEY:?Define PROVIDER_CREDENTIALS_MASTER_KEY en deploy/beta/beta.env}"
+    CORS_ORIGINS: "${CORS_ORIGINS:?Define CORS_ORIGINS en deploy/beta/beta.env}"
+    FEATURE_FLAGS: "${FEATURE_FLAGS:?Define FEATURE_FLAGS en deploy/beta/beta.env}"
+
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?Define POSTGRES_USER en deploy/beta/beta.env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en deploy/beta/beta.env}"
+      POSTGRES_DB: "${POSTGRES_DB:?Define POSTGRES_DB en deploy/beta/beta.env}"
+    volumes:
+      - contamind_beta_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - beta
+
+  migrate:
+    <<: [*backend-image, *backend-environment]
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - beta
+
+  api:
+    <<: [*backend-image, *backend-environment]
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${BETA_API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - beta
+
+  worker:
+    <<: [*backend-image, *backend-environment]
+    command: ["python", "-m", "app.workers.provider_sync_worker"]
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - beta
+
+  dian-habilitation-worker:
+    <<: [*backend-image, *backend-environment]
+    # La cola de habilitación es independiente: nunca comparte el worker
+    # genérico de sincronización ni transmite nada mientras su bandera siga
+    # desactivada.
+    command: ["python", "-m", "app.workers.dian_electronic_worker"]
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - beta
+
+  frontend:
+    image: contamind-beta-frontend:local
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: "${BETA_API_BASE_URL:?Define BETA_API_BASE_URL en deploy/beta/beta.env}"
+        VITE_REQUIRE_API_URL: "true"
+    restart: unless-stopped
+    init: true
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BETA_FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - beta
+
+volumes:
+  contamind_beta_pgdata:
+
+networks:
+  beta:
+    driver: bridge

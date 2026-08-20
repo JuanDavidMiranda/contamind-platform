@@ -4,9 +4,14 @@ import { type FormEvent, useState } from "react";
 
 import { ApiError, askBankReconciliation, askCashFlow, askElectronicInvoicing, askExogenousInformation, askHealth, askPayables, askReceivables, askTreasury, companies, login } from "./api";
 import { BankReconciliationOperations } from "./BankReconciliationOperations";
+import { BetaAccessOperations } from "./BetaAccessOperations";
+import { CompanyOnboarding } from "./CompanyOnboarding";
 import { DianConfigurationOperations } from "./DianConfigurationOperations";
+import { DianElectronicHabilitationDraft } from "./DianElectronicHabilitationDraft";
 import { ElectronicInvoicingOperations } from "./ElectronicInvoicingOperations";
 import { ExogenousInformationOperations } from "./ExogenousInformationOperations";
+import { InitialDataOperations } from "./InitialDataOperations";
+import { PasswordChangeOperations } from "./PasswordChangeOperations";
 import { ReceivablesOperations } from "./ReceivablesOperations";
 import type { CashFlowAmount, Company, Conversation, Finding, Report, ReportMetricValue } from "./types";
 import "./health-agent.css";
@@ -16,10 +21,12 @@ import "./bank-reconciliation.css";
 import "./electronic-invoicing.css";
 import "./exogenous-information.css";
 import "./dian-configuration.css";
+import "./beta-setup.css";
 
-type Session = { token: string; userId: number };
+type Session = { token: string; userId: number; isPlatformAdmin: boolean; requiresPasswordChange: boolean };
 type AgentKey = "accounting-health" | "receivables" | "payables" | "cash-flow" | "electronic-invoicing" | "exogenous-information" | "bank-reconciliation" | "treasury";
-type AgentView = "diagnostic" | "operations" | "dian";
+type AgentView = "diagnostic" | "operations" | "dian" | "dian-habilitation";
+type UtilityView = "initial-data" | "password" | "beta-access" | null;
 type Message = {
   id: string;
   role: "user" | "assistant";
@@ -233,6 +240,7 @@ export function HealthAgentApp() {
   const [companyId, setCompanyId] = useState("");
   const [activeAgent, setActiveAgent] = useState<AgentKey>("accounting-health");
   const [agentView, setAgentView] = useState<AgentView>("diagnostic");
+  const [utilityView, setUtilityView] = useState<UtilityView>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [report, setReport] = useState<Report | null>(null);
@@ -247,7 +255,8 @@ export function HealthAgentApp() {
   const agent = agentDetails[activeAgent];
   const hasOperationalView = activeAgent === "receivables" || activeAgent === "payables" || activeAgent === "electronic-invoicing" || activeAgent === "exogenous-information" || activeAgent === "bank-reconciliation";
   const showingDianConfiguration = activeAgent === "electronic-invoicing" && agentView === "dian";
-  const showingOperations = (hasOperationalView && agentView === "operations") || showingDianConfiguration;
+  const showingDianHabilitation = activeAgent === "electronic-invoicing" && agentView === "dian-habilitation";
+  const showingOperations = (hasOperationalView && agentView === "operations") || showingDianConfiguration || showingDianHabilitation;
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -257,10 +266,30 @@ export function HealthAgentApp() {
 
     try {
       const auth = await login(email.trim(), password);
+      if (auth.requires_password_change) {
+        setSession({
+          token: auth.access_token,
+          userId: auth.user_id,
+          isPlatformAdmin: auth.is_platform_admin,
+          requiresPasswordChange: true,
+        });
+        setAvailableCompanies([]);
+        setCompanyId("");
+        setUtilityView("password");
+        setPassword("");
+        setServiceNotice("Por seguridad, cambia la contraseña temporal antes de usar la beta.");
+        return;
+      }
       const companyList = await companies(auth.access_token);
-      setSession({ token: auth.access_token, userId: auth.user_id });
+      setSession({
+        token: auth.access_token,
+        userId: auth.user_id,
+        isPlatformAdmin: auth.is_platform_admin,
+        requiresPasswordChange: false,
+      });
       setAvailableCompanies(companyList);
       setCompanyId(companyList[0]?.id || "");
+      setUtilityView(null);
       setPassword("");
     } catch (cause) {
       setError(messageFor(cause, "No fue posible iniciar sesión."));
@@ -277,6 +306,7 @@ export function HealthAgentApp() {
     setQuestion("");
     setError(null);
     setServiceNotice(null);
+    setUtilityView(null);
   }
 
   function chooseAgent(nextAgent: AgentKey) {
@@ -288,6 +318,37 @@ export function HealthAgentApp() {
     setQuestion("");
     setError(null);
     setServiceNotice(null);
+    setUtilityView(null);
+  }
+
+  function chooseUtility(nextView: Exclude<UtilityView, null>) {
+    setUtilityView(nextView);
+    setError(null);
+    setServiceNotice(null);
+  }
+
+  function completeCompany(nextCompany: Company) {
+    setAvailableCompanies((current) => [...current, nextCompany]);
+    setCompanyId(nextCompany.id);
+    setUtilityView(null);
+    setConversationId(null);
+    setMessages([]);
+    setReport(null);
+    setQuestion("");
+    setError(null);
+    setServiceNotice("La empresa está lista. Carga la información inicial para obtener un diagnóstico útil.");
+  }
+
+  function goToDiagnosticAfterImport() {
+    setUtilityView(null);
+    setActiveAgent("accounting-health");
+    setAgentView("diagnostic");
+    setConversationId(null);
+    setMessages([]);
+    setReport(null);
+    setQuestion("");
+    setError(null);
+    setServiceNotice("La carga se completó. Pregunta qué requiere atención para ver el diagnóstico actualizado.");
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
@@ -421,13 +482,13 @@ export function HealthAgentApp() {
             id="company"
             value={companyId}
             onChange={(event) => chooseCompany(event.target.value)}
-            disabled={availableCompanies.length === 0}
+            disabled={availableCompanies.length === 0 || session.requiresPasswordChange}
           >
             {availableCompanies.length === 0 ? <option value="">Sin empresas disponibles</option> : null}
             {availableCompanies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
           {availableCompanies.length === 0 ? (
-            <p className="company-empty" role="status">No tienes empresas asignadas todavía.</p>
+            <p className="company-empty" role="status">Crea tu primera empresa para comenzar la prueba.</p>
           ) : null}
           {company ? (
             <span className={`company-state ${company.status}`}>
@@ -435,29 +496,49 @@ export function HealthAgentApp() {
             </span>
           ) : null}
         </section>
-        <nav aria-label="Agentes disponibles">
+        <nav aria-label="Navegación de ContaMind">
           {(Object.keys(agentDetails) as AgentKey[]).map((agentKey) => (
             <button
               key={agentKey}
               type="button"
-              className={activeAgent === agentKey ? "active" : undefined}
+              className={utilityView === null && activeAgent === agentKey ? "active" : undefined}
               onClick={() => chooseAgent(agentKey)}
+              disabled={session.requiresPasswordChange}
             >
               {agentDetails[agentKey].label}
             </button>
           ))}
-          <span>Fuentes de datos</span>
-          <span>Auditoría</span>
+          <button
+            type="button"
+            className={utilityView === "initial-data" ? "active" : undefined}
+            onClick={() => chooseUtility("initial-data")}
+            disabled={!company || session.requiresPasswordChange}
+          >
+            Carga inicial
+          </button>
+          {session.isPlatformAdmin ? (
+            <button
+              type="button"
+              className={utilityView === "beta-access" ? "active" : undefined}
+              onClick={() => chooseUtility("beta-access")}
+              disabled={session.requiresPasswordChange}
+            >
+              Accesos de beta
+            </button>
+          ) : null}
         </nav>
         <footer>
           Sesión de usuario {session.userId}
+          <button type="button" onClick={() => chooseUtility("password")}>Cambiar contraseña</button>
           <button
             type="button"
             onClick={() => {
               setSession(null);
               setAvailableCompanies([]);
+              setCompanyId("");
               setMessages([]);
               setReport(null);
+              setUtilityView(null);
             }}
           >
             Cerrar sesión
@@ -466,6 +547,23 @@ export function HealthAgentApp() {
       </aside>
 
       <section className="chat">
+        {session.requiresPasswordChange || utilityView === "password" ? (
+          <PasswordChangeOperations
+            token={session.token}
+            onChanged={(nextToken) => {
+              setSession((current) => current ? { ...current, token: nextToken, requiresPasswordChange: false } : current);
+              setUtilityView(null);
+              setServiceNotice("Contraseña actualizada. Ahora puedes crear tu empresa y cargar la información inicial.");
+            }}
+          />
+        ) : utilityView === "beta-access" && session.isPlatformAdmin ? (
+          <BetaAccessOperations token={session.token} />
+        ) : !company ? (
+          <CompanyOnboarding token={session.token} onCompleted={completeCompany} />
+        ) : utilityView === "initial-data" ? (
+          <InitialDataOperations token={session.token} company={company} onGoToDiagnostic={goToDiagnosticAfterImport} />
+        ) : (
+          <>
         <header>
           <div>
             <p className="eyebrow">{agent.eyebrow}</p>
@@ -504,20 +602,38 @@ export function HealthAgentApp() {
                   : "Conciliación operativa"}
             </button>
             {activeAgent === "electronic-invoicing" ? (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={agentView === "dian"}
-                className={agentView === "dian" ? "active" : undefined}
-                onClick={() => setAgentView("dian")}
-              >
-                Configuración DIAN
-              </button>
+              <>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={agentView === "dian"}
+                  className={agentView === "dian" ? "active" : undefined}
+                  onClick={() => setAgentView("dian")}
+                >
+                  Consulta adquirientes
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={agentView === "dian-habilitation"}
+                  className={agentView === "dian-habilitation" ? "active" : undefined}
+                  onClick={() => setAgentView("dian-habilitation")}
+                >
+                  Habilitación DIAN
+                </button>
+              </>
             ) : null}
           </div>
         ) : null}
         {showingOperations ? (
-          showingDianConfiguration ? (
+          showingDianHabilitation ? (
+            <DianElectronicHabilitationDraft
+              key={`${companyId}-${session.userId}-dian-habilitation`}
+              token={session.token}
+              company={company}
+              enabled={Boolean(canUseAgent)}
+            />
+          ) : showingDianConfiguration ? (
             <DianConfigurationOperations
               key={`${companyId}-${session.userId}-dian`}
               token={session.token}
@@ -590,10 +706,14 @@ export function HealthAgentApp() {
           <p id="electronic-invoicing-chat-scope" className="scope-hint">
             <b>Qué puedes consultar:</b> estados electrónicos importados, rechazos,
             pendientes, trazabilidad y calidad de datos de forma agregada. El agente no
-            emite, firma, transmite ni consulta documentos ante la DIAN. Para preparar
-            una consulta individual de adquiriente, usa{" "}
+            emite, firma ni transmite documentos ante la DIAN. Para preparar una consulta
+            individual de adquiriente, usa{" "}
             <button type="button" className="scope-link" onClick={() => setAgentView("dian")}>
-              Configuración DIAN
+              Consulta adquirientes
+            </button>{" "}
+            y para revisar el estado de pruebas de software propio, usa{" "}
+            <button type="button" className="scope-link" onClick={() => setAgentView("dian-habilitation")}>
+              Habilitación DIAN
             </button>.
           </p>
         ) : null}
@@ -718,9 +838,11 @@ export function HealthAgentApp() {
         </form>
           </>
         )}
+          </>
+        )}
       </section>
 
-      <aside className="evidence">
+      {company && utilityView === null ? <aside className="evidence">
         <section className="card status">
           <p className="side-label">ESTADO ACTUAL</p>
           {report ? (
@@ -842,7 +964,7 @@ export function HealthAgentApp() {
             </section>
           </>
         ) : null}
-      </aside>
+      </aside> : null}
     </main>
   );
 }

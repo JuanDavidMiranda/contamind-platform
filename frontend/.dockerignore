@@ -1,0 +1,11 @@
+.env
+.env.*
+node_modules/
+dist/
+.next/
+.vinext/
+.wrangler/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*

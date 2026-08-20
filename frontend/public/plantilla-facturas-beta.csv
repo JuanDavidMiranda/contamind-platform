@@ -1,0 +1,3 @@
+Numero,Tipo,Fecha emision,Fecha vencimiento,Descripcion,Cantidad,Precio unitario,Moneda,Total impuestos,Documento emisor,Documento receptor
+FV-100,sale,2026-08-01,2026-08-31,Servicio mensual de ejemplo,1,100000,COP,19000,,900123456
+FC-200,purchase,2026-08-02,2026-08-20,Compra de ejemplo,1,50000,COP,0,901654321,

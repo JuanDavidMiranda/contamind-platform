@@ -2,11 +2,11 @@
 
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.organization import CompanyRecord, TenantMembership, TenantRecord, TenantRole
-from app.models.user import CompanyMembership, CompanyRole, User
+from app.models.user import CompanyMembership, CompanyRole, Subscription, User
 from app.providers.canonical import Company, CompanyStatus, Tenant
 from app.shared.errors import app_error
 
@@ -26,6 +26,8 @@ class CompanyService:
         provider_company_id: str | None,
     ) -> tuple[Tenant, Company]:
         """Crea tenant, empresa y su primer propietario en una transacción."""
+
+        self._require_available_company_slot(user)
 
         tenant = Tenant(name=tenant_name, country_code=country_code)
         company = Company(
@@ -77,6 +79,7 @@ class CompanyService:
         functional_currency: str,
         provider_company_id: str | None,
     ) -> Company:
+        self._require_available_company_slot(user)
         self.get_tenant(tenant_id)
         company = Company(
             tenant_id=tenant_id,
@@ -199,3 +202,23 @@ class CompanyService:
         if record is None:
             raise app_error("NOT_FOUND", message="Empresa no encontrada.")
         return record
+
+    def _require_available_company_slot(self, user: User) -> None:
+        """Respeta el límite del plan de prueba sin afectar cuentas heredadas."""
+
+        subscription = self._db.scalar(
+            select(Subscription).where(Subscription.account_id == user.id)
+        )
+        if subscription is None or user.is_platform_admin:
+            return
+        owned_companies = self._db.scalar(
+            select(func.count(CompanyMembership.id)).where(
+                CompanyMembership.user_id == user.id,
+                CompanyMembership.role == CompanyRole.OWNER.value,
+            )
+        ) or 0
+        if owned_companies >= subscription.company_limit:
+            raise app_error(
+                "CONFLICT",
+                message="Tu acceso de prueba ya alcanzó el límite de empresas configurado.",
+            )

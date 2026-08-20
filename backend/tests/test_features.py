@@ -10,6 +10,32 @@ from app.config.settings import Settings, settings
 pytestmark = pytest.mark.unit
 
 
+def protected_settings(**overrides):
+    values = {
+        "ENVIRONMENT": "production",
+        "DEBUG": False,
+        "DATABASE_URL": "postgresql+psycopg2://beta_user:beta_password@db.internal/contamind_beta",
+        "CORS_ORIGINS": ["https://beta.contamind.test"],
+        "AUTH_SECRET_KEY": "a" * 32,
+        "PROVIDER_CREDENTIALS_MASTER_KEY": Fernet.generate_key().decode(),
+        "PLATFORM_ADMIN_EMAILS": "operator@contamind.test",
+        "FEATURE_FLAGS": {
+            features.FEATURE_DIAN_INTEGRATION: False,
+            features.FEATURE_DIAN_ELECTRONIC_HABILITATION: False,
+            features.FEATURE_SIIGO_INTEGRATION: False,
+            features.FEATURE_ALEGRA_INTEGRATION: False,
+            features.FEATURE_WORLDOFFICE_INTEGRATION: False,
+            features.FEATURE_NOVASOFT_INTEGRATION: False,
+            features.FEATURE_SYSCAFE_INTEGRATION: False,
+            features.FEATURE_LLM: False,
+            features.FEATURE_MOCK_EXTERNAL_SERVICES: False,
+        },
+        "_env_file": None,
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
 def test_feature_flags_default_disabled():
     assert features.is_enabled(features.FEATURE_DIAN_INTEGRATION) is False
     assert features.is_enabled(features.FEATURE_SIIGO_INTEGRATION) is False
@@ -20,6 +46,7 @@ def test_enabled_features_exposes_known_flags():
     assert set(result) == {
         "ALEGRA_INTEGRATION_ENABLED",
         "DIAN_INTEGRATION_ENABLED",
+        "DIAN_ELECTRONIC_HABILITATION_ENABLED",
         "SIIGO_INTEGRATION_ENABLED",
         "LLM_ENABLED",
         "MOCK_EXTERNAL_SERVICES",
@@ -38,11 +65,9 @@ def test_is_enabled_reads_configured_flags(monkeypatch):
     assert features.is_enabled(features.FEATURE_LLM) is True
 
 
-def test_mock_default_is_enabled():
-    assert (
-        features.is_enabled(features.FEATURE_MOCK_EXTERNAL_SERVICES, default=True)
-        is True
-    )
+def test_mock_default_is_disabled_without_an_explicit_flag(monkeypatch):
+    monkeypatch.setattr(settings, "FEATURE_FLAGS", {})
+    assert features.is_enabled(features.FEATURE_MOCK_EXTERNAL_SERVICES) is False
 
 
 def test_provider_flags_are_disabled_by_default():
@@ -61,22 +86,22 @@ def test_is_provider_enabled_reads_provider_feature_flag(monkeypatch):
 
 def test_production_requires_an_openai_key_when_llm_is_enabled():
     with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
-        Settings(
-            ENVIRONMENT="production",
-            AUTH_SECRET_KEY="test-auth-secret",
-            PROVIDER_CREDENTIALS_MASTER_KEY=Fernet.generate_key().decode(),
-            FEATURE_FLAGS={features.FEATURE_LLM: True},
+        protected_settings(
+            FEATURE_FLAGS={
+                **protected_settings().FEATURE_FLAGS,
+                features.FEATURE_LLM: True,
+            },
             OPENAI_API_KEY=None,
         )
 
 
 def test_production_requires_an_openai_model_when_llm_is_enabled():
     with pytest.raises(ValidationError, match="OPENAI_MODEL"):
-        Settings(
-            ENVIRONMENT="production",
-            AUTH_SECRET_KEY="test-auth-secret",
-            PROVIDER_CREDENTIALS_MASTER_KEY=Fernet.generate_key().decode(),
-            FEATURE_FLAGS={features.FEATURE_LLM: True},
+        protected_settings(
+            FEATURE_FLAGS={
+                **protected_settings().FEATURE_FLAGS,
+                features.FEATURE_LLM: True,
+            },
             OPENAI_API_KEY="test-api-key",
             OPENAI_MODEL="   ",
         )

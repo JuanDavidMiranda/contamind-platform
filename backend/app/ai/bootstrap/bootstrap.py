@@ -37,7 +37,7 @@ def bootstrap() -> None:
     logger.info("agent registered", extra={"agent": "bank_reconciliation"})
     agent_registry.register(TreasuryAgent())
     logger.info("agent registered", extra={"agent": "treasury"})
-    if is_enabled(FEATURE_MOCK_EXTERNAL_SERVICES, default=True):
+    if is_enabled(FEATURE_MOCK_EXTERNAL_SERVICES):
         registry.register(ConsultarObligacionesTool())
         logger.info(
             "tool registrada (MOCK)",

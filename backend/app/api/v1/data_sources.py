@@ -40,6 +40,8 @@ from app.shared.security import get_current_user
 
 router = APIRouter(prefix="/data-sources", tags=["Data sources"])
 
+_DIAN_ELECTRONIC_HABILITATION_CONNECTOR_ID = "dian_electronic_habilitation"
+
 
 class DataSourceCreate(BaseModel):
     tenant_id: UUID
@@ -133,6 +135,19 @@ def _source_for_role(
     CompanyService(db).require_active_company(source.company_id)
     require_company_role(user, db, source.company_id, allowed_roles)
     return source
+
+
+def _ensure_generic_provider_operation(source: CompanyDataSource) -> None:
+    """Evita que la fuente especializada de habilitación use rutas genéricas."""
+
+    if source.connector_id == _DIAN_ELECTRONIC_HABILITATION_CONNECTOR_ID:
+        raise app_error(
+            "CONFLICT",
+            message=(
+                "La habilitación de facturación DIAN usa su flujo especializado: "
+                "credenciales técnicas y documentos firmados de prueba."
+            ),
+        )
 
 
 @router.post("", response_model=CompanyDataSource, status_code=201)
@@ -270,7 +285,8 @@ def save_provider_credentials(
     """Guarda o rota secretos sin devolverlos ni escribirlos en la auditoría."""
 
     user = _current_user(authorization, db)
-    _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    source_record = _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    _ensure_generic_provider_operation(source_record)
     source = ProviderConnectionService(db).save_credentials(
         data_source_id, payload.plain_values(), actor_user_id=user.id
     )
@@ -289,7 +305,8 @@ def revoke_provider_credentials(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
-    _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    source_record = _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    _ensure_generic_provider_operation(source_record)
     ProviderConnectionService(db).revoke_credentials(data_source_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -302,7 +319,8 @@ async def test_provider_connection(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
-    _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    source = _source_for_role(data_source_id, user, db, MANAGE_SOURCES_ROLES)
+    _ensure_generic_provider_operation(source)
     return await ProviderConnectionService(db).test_connection(
         data_source_id,
         actor_user_id=user.id,
@@ -323,7 +341,8 @@ def enqueue_provider_party_sync(
     db: Session = Depends(get_db),
 ):
     user = _current_user(authorization, db)
-    _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
+    source = _source_for_role(data_source_id, user, db, OPERATE_SOURCES_ROLES)
+    _ensure_generic_provider_operation(source)
     return ProviderConnectionService(db).enqueue_party_sync(
         data_source_id,
         actor_user_id=user.id,

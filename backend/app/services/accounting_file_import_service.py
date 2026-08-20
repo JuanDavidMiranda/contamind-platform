@@ -24,7 +24,7 @@ from app.data_sources.models import (
     ImportProfile,
     ImportRejection,
 )
-from app.models.accounting import InvoiceRecord, ItemRecord, TaxRecord
+from app.models.accounting import InvoiceRecord, ItemRecord, PaymentRecord, TaxRecord
 from app.models.data_source import PartyRecord
 from app.providers.canonical import Currency, InvoiceLine, InvoiceType, ItemType, JournalEntryLine
 from app.services.manual_accounting_service import ManualAccountingService
@@ -65,19 +65,45 @@ class AccountingFileImportService:
         if profile.entity is ImportEntity.ITEMS:
             return self._single_rows(source, profile, rows, content_hash, actor_user_id, self._create_item)
         if profile.entity is ImportEntity.PAYMENTS:
-            return self._single_rows(source, profile, rows, content_hash, actor_user_id, self._create_payment)
+            return self._single_rows(
+                source,
+                profile,
+                rows,
+                content_hash,
+                actor_user_id,
+                self._create_payment,
+                idempotency_key_for_row=self._payment_idempotency_key,
+            )
         if profile.entity is ImportEntity.INVOICES:
             return self._grouped_invoices(source, profile, rows, content_hash, actor_user_id)
         if profile.entity is ImportEntity.JOURNAL_ENTRIES:
             return self._grouped_journals(source, profile, rows, content_hash, actor_user_id)
         raise app_error("CONFLICT", message="Esta entidad debe importarse por su ruta especializada.")
 
-    def _single_rows(self, source, profile, rows, content_hash, actor_user_id, create) -> AccountingImportResult:
+    def _single_rows(
+        self,
+        source,
+        profile,
+        rows,
+        content_hash,
+        actor_user_id,
+        create,
+        *,
+        idempotency_key_for_row=None,
+    ) -> AccountingImportResult:
         accepted = 0
         rejections: list[ImportRejection] = []
         for row_number, row in rows:
             try:
-                create(source, profile, row, actor_user_id, self._idempotency_key(content_hash, profile.entity, str(row_number)))
+                custom_idempotency_key = (
+                    idempotency_key_for_row(profile, row) if idempotency_key_for_row else None
+                )
+                idempotency_key = custom_idempotency_key or self._idempotency_key(
+                    content_hash,
+                    profile.entity,
+                    str(row_number),
+                )
+                create(source, profile, row, actor_user_id, idempotency_key)
                 accepted += 1
             except (AppError, ValueError, TypeError, InvalidOperation) as exc:
                 rejections.append(self._rejection(row_number, exc))
@@ -93,6 +119,18 @@ class AccountingFileImportService:
         for number, group in groups.items():
             try:
                 first = group[0][1]
+                invoice_type = InvoiceType(self._required(profile, first, "invoice_type"))
+                idempotency_key = self._stable_idempotency_key(
+                    profile.entity.value,
+                    invoice_type.value,
+                    number,
+                )
+                self._reject_existing(
+                    InvoiceRecord,
+                    source,
+                    idempotency_key,
+                    "factura",
+                )
                 lines = tuple(self._invoice_line(profile, row, source.company_id) for _, row in group)
                 due_date = self._consistent_group_value(profile, group, "due_date", self._date)
                 payment_terms_days = self._consistent_group_value(
@@ -103,7 +141,7 @@ class AccountingFileImportService:
                 )
                 self._manual.create_invoice(
                     source.id,
-                    invoice_type=InvoiceType(self._required(profile, first, "invoice_type")),
+                    invoice_type=invoice_type,
                     issue_date=self._date(profile, first, "issue_date", required=True),
                     due_date=due_date,
                     payment_terms_days=payment_terms_days,
@@ -116,7 +154,7 @@ class AccountingFileImportService:
                     number=number,
                     status=self._value(profile, first, "status"),
                     actor_user_id=actor_user_id,
-                    idempotency_key=self._idempotency_key(content_hash, profile.entity, number),
+                    idempotency_key=idempotency_key,
                 )
                 accepted += len(group)
             except (AppError, ValueError, TypeError, InvalidOperation) as exc:
@@ -177,6 +215,7 @@ class AccountingFileImportService:
         )
 
     def _create_payment(self, source, profile, row, actor_user_id, idempotency_key) -> None:
+        self._reject_existing(PaymentRecord, source, idempotency_key, "pago")
         self._manual.create_payment(
             source.id,
             payment_date=self._date(profile, row, "payment_date", required=True),
@@ -266,13 +305,23 @@ class AccountingFileImportService:
         number = self._value(profile, row, "invoice_number")
         if not number:
             return None
-        record = self._db.scalar(
-            select(InvoiceRecord).where(
-                InvoiceRecord.company_id == str(company_id), InvoiceRecord.number == number
-            )
+        statement = select(InvoiceRecord).where(
+            InvoiceRecord.company_id == str(company_id), InvoiceRecord.number == number
         )
-        if record is None:
+        invoice_type = self._value(profile, row, "invoice_type")
+        if invoice_type:
+            try:
+                statement = statement.where(InvoiceRecord.invoice_type == InvoiceType(invoice_type).value)
+            except ValueError as exc:
+                raise ValueError("'invoice_type' debe ser sale o purchase.") from exc
+        records = list(self._db.scalars(statement))
+        if not records:
             raise ValueError(f"No existe una factura con número '{number}'.")
+        if len(records) > 1:
+            raise ValueError(
+                f"Hay más de una factura con número '{number}'; incluye su tipo para identificar el pago."
+            )
+        record = records[0]
         return self._uuid(record.id, "invoice_id")
 
     def _tax_ids(self, profile, row, company_id, field):
@@ -362,6 +411,30 @@ class AccountingFileImportService:
     @staticmethod
     def _idempotency_key(content_hash, entity, discriminator):
         return hashlib.sha256(f"{content_hash}:{entity.value}:{discriminator}".encode()).hexdigest()
+
+    def _payment_idempotency_key(self, profile, row) -> str | None:
+        if "payment_reference" not in profile.column_mapping:
+            return None
+        reference = self._required(profile, row, "payment_reference")
+        return self._stable_idempotency_key(profile.entity.value, reference)
+
+    @staticmethod
+    def _stable_idempotency_key(entity: str, *parts: str) -> str:
+        normalized = ":".join((entity, *(part.strip().casefold() for part in parts)))
+        return hashlib.sha256(normalized.encode()).hexdigest()
+
+    def _reject_existing(self, model, source, idempotency_key: str, label: str) -> None:
+        existing = self._db.scalar(
+            select(model.id).where(
+                model.data_source_id == str(source.id),
+                model.company_id == str(source.company_id),
+                model.idempotency_key == idempotency_key,
+            )
+        )
+        if existing is not None:
+            raise ValueError(
+                f"Ya existe un {label} con esta referencia; no se modificó para evitar duplicados."
+            )
 
     @staticmethod
     def _rejection(row_number, exc):

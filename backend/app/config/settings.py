@@ -1,6 +1,7 @@
 import secrets
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet
 from pydantic import Field, SecretStr, model_validator
@@ -53,21 +54,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_secret(self) -> "Settings":
+        configured_fields = self.model_fields_set
         if self.DATABASE_URL is None:
             self.DATABASE_URL = (
                 f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
             )
-        if self.ENVIRONMENT in ("staging", "production") and not self.AUTH_SECRET_KEY:
-            raise ValueError(
-                "AUTH_SECRET_KEY es obligatoria en los ambientes "
-                "staging y production. Defínela en el entorno."
-            )
-        if self.ENVIRONMENT in ("staging", "production") and not self.PROVIDER_CREDENTIALS_MASTER_KEY:
-            raise ValueError(
-                "PROVIDER_CREDENTIALS_MASTER_KEY es obligatoria en los ambientes "
-                "staging y production."
-            )
+        if self.ENVIRONMENT in ("staging", "production"):
+            self._validate_protected_environment(configured_fields)
         if (
             self.ENVIRONMENT in ("staging", "production")
             and self.FEATURE_FLAGS.get("LLM_ENABLED", False)
@@ -99,6 +93,56 @@ class Settings(BaseSettings):
         if self.AUTH_SECRET_KEY is None:
             self.AUTH_SECRET_KEY = secrets.token_hex(32)
         return self
+
+    def _validate_protected_environment(self, configured_fields: set[str]) -> None:
+        """Evita que una beta externa arranque con valores locales inseguros."""
+
+        if self.DEBUG:
+            raise ValueError("DEBUG debe ser false en staging y production.")
+        if (
+            "DATABASE_URL" not in configured_fields
+            or not self.DATABASE_URL
+            or not self.DATABASE_URL.startswith("postgresql")
+        ):
+            raise ValueError(
+                "DATABASE_URL debe definir explícitamente una base PostgreSQL en staging y production."
+            )
+        if "CORS_ORIGINS" not in configured_fields or not self.CORS_ORIGINS:
+            raise ValueError("CORS_ORIGINS debe definir los orígenes HTTPS autorizados.")
+        if any(
+            urlparse(origin).scheme != "https" or not urlparse(origin).netloc
+            for origin in self.CORS_ORIGINS
+        ):
+            raise ValueError("CORS_ORIGINS solo admite URLs HTTPS válidas en staging y production.")
+        if not self.AUTH_SECRET_KEY or len(self.AUTH_SECRET_KEY) < 32:
+            raise ValueError(
+                "AUTH_SECRET_KEY debe tener al menos 32 caracteres en staging y production."
+            )
+        if not self.PROVIDER_CREDENTIALS_MASTER_KEY:
+            raise ValueError(
+                "PROVIDER_CREDENTIALS_MASTER_KEY es obligatoria en staging y production."
+            )
+        if not self.PLATFORM_ADMIN_EMAILS.strip():
+            raise ValueError("PLATFORM_ADMIN_EMAILS debe incluir al menos un administrador de plataforma.")
+
+        required_flags = {
+            "DIAN_INTEGRATION_ENABLED",
+            "DIAN_ELECTRONIC_HABILITATION_ENABLED",
+            "SIIGO_INTEGRATION_ENABLED",
+            "ALEGRA_INTEGRATION_ENABLED",
+            "WORLDOFFICE_INTEGRATION_ENABLED",
+            "NOVASOFT_INTEGRATION_ENABLED",
+            "SYSCAFE_INTEGRATION_ENABLED",
+            "LLM_ENABLED",
+            "MOCK_EXTERNAL_SERVICES",
+        }
+        missing_flags = sorted(required_flags.difference(self.FEATURE_FLAGS))
+        if missing_flags:
+            raise ValueError(
+                "FEATURE_FLAGS debe declarar explícitamente: " + ", ".join(missing_flags) + "."
+            )
+        if self.FEATURE_FLAGS["MOCK_EXTERNAL_SERVICES"]:
+            raise ValueError("MOCK_EXTERNAL_SERVICES debe ser false en staging y production.")
 
 
 @lru_cache

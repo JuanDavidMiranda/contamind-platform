@@ -17,6 +17,9 @@ from app.providers.runtime import default_provider_factory
 from app.shared.errors import AppError, app_error
 
 
+_DIAN_ACQUIRER_CONNECTOR_ID = "dian_get_acquirer"
+
+
 class DianAcquirerLookup:
     """Resultado efímero; solo se expone a quien realizó la consulta autorizada."""
 
@@ -104,7 +107,8 @@ class DianAcquirerService:
         if source is None or source.company_id != str(company_id):
             raise app_error("NOT_FOUND", message="Fuente DIAN no encontrada para esta empresa.")
         if (
-            source.provider_id != ProviderKind.DIAN.value
+            source.connector_id != _DIAN_ACQUIRER_CONNECTOR_ID
+            or source.provider_id != ProviderKind.DIAN.value
             or source.kind != DataSourceKind.FISCAL_AUTHORITY.value
             or source.mode != ConnectionMode.FISCAL_SERVICE.value
         ):

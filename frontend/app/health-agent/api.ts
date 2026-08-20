@@ -1,9 +1,20 @@
 import type {
+  AccountingImportResult,
   CollectionFollowUp,
   CollectionFollowUpCreate,
   CollectionFollowUpUpdate,
   DataSource,
   DianAcquirerLookupsResponse,
+  DianDocumentEventsResponse,
+  DianElectronicDocument,
+  DianHabilitationAccess,
+  DianHabilitationProfile,
+  DianHabilitationParametersInput,
+  DianHabilitationProfileWrite,
+  DianNumberingRange,
+  DianNumberingRangeWrite,
+  DianSignedTestDocumentUpload,
+  DianTechnicalCredentialsInput,
   BankAccount,
   BankAccountsResponse,
   BankBalanceSnapshot,
@@ -13,6 +24,9 @@ import type {
   BankTransaction,
   BankTransactionsResponse,
   Company,
+  CompanyOnboardingResponse,
+  BetaAccess,
+  DianAcquirerLookup,
   ElectronicInvoiceEvidenceImportResult,
   ElectronicInvoiceEvidenceImportRowsResponse,
   ElectronicInvoiceEvidenceImportsResponse,
@@ -20,15 +34,86 @@ import type {
   ExogenousInformationExceptionsResponse,
   HealthResponse,
   InvoiceTermsUpdate,
+  ImportProfile,
   LoginResult,
   OpenReceivablesResponse,
   ProviderCredentialsResponse,
+  PartyImportResult,
+  PasswordChangeResponse,
 } from "./types";
 
-const baseUrl = () => (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
+const baseUrl = () => {
+  const configured = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (configured) return configured.replace(/\/$/, "");
+  if (import.meta.env.DEV) return "http://localhost:8000/api/v1";
+  throw new ApiError("La versión de prueba no tiene configurada la URL segura del servicio.");
+};
 
 export class ApiError extends Error {
   constructor(message: string) { super(message); this.name = "ApiError"; }
+}
+
+type ApiErrorPayload = {
+  error?: { message?: unknown };
+  detail?: unknown;
+};
+
+const validationFieldLabels: Record<string, string> = {
+  legal_name: "la razón social",
+  nit: "el NIT",
+  check_digit: "el dígito de verificación",
+  email: "el correo electrónico",
+  address: "la dirección",
+  city_code: "el código de municipio",
+  city_name: "el municipio",
+  department_code: "el código de departamento",
+  department_name: "el departamento",
+  tax_responsibilities: "las responsabilidades tributarias",
+  software_test_set_id: "el conjunto de pruebas",
+  signature_policy_identifier: "la política de firma",
+  signature_policy_digest_base64: "el hash de la política de firma",
+  signature_policy_qualifier_url: "la URL de la política de firma",
+  software_id: "el ID del software",
+  software_password: "la contraseña del software",
+  certificate_pfx_base64: "el certificado",
+  certificate_password: "la contraseña del certificado",
+  prefix: "el prefijo",
+  consecutive: "el consecutivo",
+  issue_date: "la fecha de emisión",
+  document_type: "el tipo de documento",
+  currency_code: "la moneda",
+  payable_amount: "el valor total",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function safeValidationMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail)) return null;
+
+  const fields = new Set<string>();
+  for (const item of detail) {
+    if (!isRecord(item) || !Array.isArray(item.loc)) continue;
+    const field = [...item.loc].reverse().find((value) => typeof value === "string" && !["body", "query", "path"].includes(value));
+    if (typeof field === "string") fields.add(validationFieldLabels[field] || "los datos ingresados");
+  }
+
+  if (!fields.size) return "Revisa los datos ingresados y vuelve a intentarlo.";
+  const labels = [...fields].slice(0, 3);
+  const joined = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} y ${labels.at(-1)}` : labels[0];
+  return `Revisa ${joined} y vuelve a intentarlo.`;
+}
+
+function safeErrorMessage(payload: unknown): string | null {
+  if (!isRecord(payload)) return null;
+  const source = payload as ApiErrorPayload;
+  if (typeof source.error?.message === "string" && source.error.message.trim()) return source.error.message;
+
+  const validationMessage = safeValidationMessage(source.detail);
+  if (validationMessage) return validationMessage;
+  if (typeof source.detail === "string" && source.detail.trim()) return source.detail;
+  return null;
 }
 
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
@@ -44,14 +129,28 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const source = payload as { error?: { message?: string }; detail?: string } | null;
-    throw new ApiError(source?.error?.message || source?.detail || "No fue posible completar la solicitud.");
+    throw new ApiError(safeErrorMessage(payload) || "No fue posible completar la solicitud.");
   }
   return payload as T;
 }
 
 export const login = (email: string, password: string) => request<LoginResult>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+export const changePassword = (token: string, currentPassword: string, newPassword: string) => request<PasswordChangeResponse>(
+  "/auth/change-password",
+  { method: "POST", body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) },
+  token,
+);
+export const createBetaAccess = (token: string, payload: { full_name: string; email: string; temporary_password: string }) => request<BetaAccess>(
+  "/admin/beta-access",
+  { method: "POST", body: JSON.stringify(payload) },
+  token,
+);
 export const companies = (token: string) => request<Company[]>("/companies/mine", {}, token);
+export const onboardCompany = (token: string, payload: { tenant_name: string; company_name: string; functional_currency: string }) => request<CompanyOnboardingResponse>(
+  "/companies/onboarding",
+  { method: "POST", body: JSON.stringify({ country_code: "CO", ...payload }) },
+  token,
+);
 export const askHealth = (token: string, companyId: string, message: string, conversationId: string | null) => request<HealthResponse>(
   `/companies/${companyId}/agents/accounting-health/chat`,
   { method: "POST", body: JSON.stringify({ message, ...(conversationId ? { conversation_id: conversationId } : {}) }) },
@@ -303,6 +402,52 @@ export const dataSources = (token: string, companyId: string) => request<DataSou
   token,
 );
 
+export const createInitialCsvDataSource = (token: string, company: Company) => request<DataSource>(
+  "/data-sources",
+  {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: company.tenant_id,
+      company_id: company.id,
+      connector_id: "csv_import",
+      display_name: "Carga inicial CSV",
+      kind: "file_import",
+      mode: "file_upload",
+      capabilities: ["parties", "invoices", "payments", "file_import_export"],
+    }),
+  },
+  token,
+);
+
+export const createImportProfile = (
+  token: string,
+  dataSourceId: string,
+  payload: {
+    entity: "parties" | "invoices" | "payments";
+    file_format: "csv";
+    column_mapping: Record<string, string>;
+    default_party_type?: "customer" | "supplier" | "both";
+  },
+) => request<ImportProfile>(
+  `/data-sources/${dataSourceId}/profiles`,
+  { method: "POST", body: JSON.stringify(payload) },
+  token,
+);
+
+export const importParties = (token: string, dataSourceId: string, profileId: string, file: File) => {
+  const body = new FormData();
+  body.set("profile_id", profileId);
+  body.set("file", file);
+  return request<PartyImportResult>(`/data-sources/${dataSourceId}/imports/parties`, { method: "POST", body }, token);
+};
+
+export const importAccounting = (token: string, dataSourceId: string, profileId: string, file: File) => {
+  const body = new FormData();
+  body.set("profile_id", profileId);
+  body.set("file", file);
+  return request<AccountingImportResult>(`/data-sources/${dataSourceId}/imports/accounting`, { method: "POST", body }, token);
+};
+
 export const createDianDataSource = (token: string, company: Company) => request<DataSource>(
   "/data-sources",
   {
@@ -346,7 +491,7 @@ export const lookupDianAcquirer = (
     purpose: "electronic_invoice_issuance";
     confirmed: true;
   },
-) => request<DianAcquirer>(
+) => request<DianAcquirerLookup>(
   `/companies/${companyId}/dian/acquirers/lookup`,
   { method: "POST", body: JSON.stringify(payload) },
   token,
@@ -355,5 +500,107 @@ export const lookupDianAcquirer = (
 export const dianAcquirerLookups = (token: string, companyId: string) => request<DianAcquirerLookupsResponse>(
   `/companies/${companyId}/dian/acquirers/lookups?limit=20`,
   {},
+  token,
+);
+
+export const dianHabilitationProfile = (token: string, companyId: string) => request<DianHabilitationProfile | null>(
+  `/companies/${companyId}/dian/electronic-invoicing/habilitation`,
+  {},
+  token,
+);
+
+export const dianHabilitationAccess = (token: string, companyId: string) => request<DianHabilitationAccess>(
+  `/companies/${companyId}/dian/electronic-invoicing/habilitation/access`,
+  {},
+  token,
+);
+
+export const saveDianHabilitationProfile = (
+  token: string,
+  companyId: string,
+  payload: DianHabilitationProfileWrite,
+) => request<DianHabilitationProfile>(
+  `/companies/${companyId}/dian/electronic-invoicing/habilitation`,
+  { method: "PUT", body: JSON.stringify(payload) },
+  token,
+);
+
+export const saveDianTechnicalCredentials = (
+  token: string,
+  companyId: string,
+  payload: DianTechnicalCredentialsInput,
+) => request<DianHabilitationProfile>(
+  `/companies/${companyId}/dian/electronic-invoicing/technical-credentials`,
+  { method: "PUT", body: JSON.stringify(payload) },
+  token,
+);
+
+export const saveDianHabilitationParameters = (
+  token: string,
+  companyId: string,
+  payload: DianHabilitationParametersInput,
+) => request<DianHabilitationProfile>(
+  `/companies/${companyId}/dian/electronic-invoicing/habilitation-parameters`,
+  { method: "PUT", body: JSON.stringify(payload) },
+  token,
+);
+
+export const revokeDianTechnicalCredentials = (token: string, companyId: string) => request<void>(
+  `/companies/${companyId}/dian/electronic-invoicing/technical-credentials`,
+  { method: "DELETE" },
+  token,
+);
+
+export const dianNumberingRanges = (token: string, companyId: string) => request<DianNumberingRange[]>(
+  `/companies/${companyId}/dian/electronic-invoicing/numbering-ranges`,
+  {},
+  token,
+);
+
+export const createDianNumberingRange = (
+  token: string,
+  companyId: string,
+  payload: DianNumberingRangeWrite,
+) => request<DianNumberingRange>(
+  `/companies/${companyId}/dian/electronic-invoicing/numbering-ranges`,
+  { method: "POST", body: JSON.stringify(payload) },
+  token,
+);
+
+export const dianSignedTestDocuments = (token: string, companyId: string) => request<DianElectronicDocument[]>(
+  `/companies/${companyId}/dian/electronic-invoicing/test-documents?limit=50`,
+  {},
+  token,
+);
+
+export const uploadDianSignedTestDocument = (
+  token: string,
+  companyId: string,
+  payload: DianSignedTestDocumentUpload,
+) => {
+  const body = new FormData();
+  body.set("file", payload.file);
+  body.set("prefix", payload.prefix);
+  body.set("consecutive", String(payload.consecutive));
+  body.set("issue_date", payload.issue_date);
+  body.set("document_type", payload.document_type);
+  body.set("currency_code", payload.currency_code);
+  body.set("payable_amount", payload.payable_amount);
+  body.set("confirmed", "true");
+  return request<DianElectronicDocument>(
+    `/companies/${companyId}/dian/electronic-invoicing/test-documents`,
+    { method: "POST", body },
+    token,
+  );
+};
+
+export const dianSignedTestDocumentEvents = (
+  token: string,
+  companyId: string,
+  documentId: string,
+  signal?: AbortSignal,
+) => request<DianDocumentEventsResponse>(
+  `/companies/${companyId}/dian/electronic-invoicing/test-documents/${encodeURIComponent(documentId)}/events`,
+  { signal },
   token,
 );

@@ -15,6 +15,12 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255))
     password_hash: Mapped[str] = mapped_column(String(255))
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Incrementar este valor invalida todos los JWT emitidos antes del cambio.
+    # Es especialmente importante al rotar una contraseña temporal de beta.
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
+    # Una cuenta entregada para la beta no puede operar hasta reemplazar la
+    # contraseña temporal compartida por el administrador de plataforma.
+    requires_password_change: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

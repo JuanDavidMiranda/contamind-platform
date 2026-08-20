@@ -1,5 +1,11 @@
 export type Company = { id: string; tenant_id: string; name: string; status: "active" | "disabled"; functional_currency: string };
-export type LoginResult = { access_token: string; token_type: "bearer"; user_id: number; is_platform_admin: boolean };
+export type CompanyOnboardingResponse = {
+  tenant: { id: string; name: string; country_code: string };
+  company: Company;
+};
+export type LoginResult = { access_token: string; token_type: "bearer"; user_id: number; is_platform_admin: boolean; requires_password_change: boolean };
+export type PasswordChangeResponse = { access_token: string; token_type: "bearer"; requires_password_change: false };
+export type BetaAccess = { id: number; full_name: string; email: string };
 export type Finding = { code: string; severity: "critical" | "warning" | "info"; message: string; evidence: Record<string, number>; recommendation: string };
 export type ReceivablesBalance = { currency_code: string; amount: string };
 export type ReceivablesAgingBucket = {
@@ -259,6 +265,20 @@ export type DataSource = {
   last_sync_cursor: string | null;
 };
 
+export type ImportProfile = { id: string };
+export type ImportRejection = { row_number: number; message: string };
+export type PartyImportResult = {
+  batch_id: string;
+  parties: Array<{ id: string }>;
+  rejections: ImportRejection[];
+};
+export type AccountingImportResult = {
+  batch_id: string;
+  entity: "invoices" | "payments" | "taxes" | "items" | "journal_entries";
+  accepted_rows: number;
+  rejections: ImportRejection[];
+};
+
 export type ProviderCredentialsResponse = {
   data_source_id: string;
   provider_id: string;
@@ -286,4 +306,132 @@ export type DianAcquirerLookupAudit = {
 export type DianAcquirerLookupsResponse = {
   total: number;
   items: DianAcquirerLookupAudit[];
+};
+
+/** Habilitation profile returned only to an authorized company member. */
+export type DianHabilitationProfile = {
+  id: string;
+  company_id: string;
+  environment: "habilitation";
+  production_locked: true;
+  integration_enabled: boolean;
+  can_manage_habilitation: boolean;
+  status: string;
+  software_test_set_id_configured: boolean;
+  legal_name: string;
+  nit: string;
+  check_digit: string;
+  email: string;
+  address: string;
+  city_code: string;
+  city_name: string;
+  department_code: string;
+  department_name: string;
+  country_code: string;
+  tax_responsibilities: string[];
+  phone: string | null;
+  tax_regime: string | null;
+  credential_configured: boolean;
+  active_numbering_ranges: number;
+  missing_requirements: string[];
+};
+
+/** Permission returned even when the company does not yet have a profile. */
+export type DianHabilitationAccess = {
+  can_manage_habilitation: boolean;
+};
+
+/** Fiscal fields accepted by the habilitation profile endpoint. */
+export type DianHabilitationProfileWrite = {
+  legal_name: string;
+  nit: string;
+  check_digit: string;
+  email: string;
+  address: string;
+  city_code: string;
+  city_name: string;
+  department_code: string;
+  department_name: string;
+  tax_responsibilities: string[];
+  phone: string | null;
+  tax_regime: string | null;
+};
+
+export type DianHabilitationParametersInput = {
+  software_test_set_id: string;
+  signature_policy_identifier: string;
+  signature_policy_digest_base64: string;
+  signature_policy_qualifier_url: string | null;
+};
+
+export type DianTechnicalCredentialsInput = {
+  software_id: string;
+  software_password: string;
+  certificate_pfx_base64: string;
+  certificate_password: string;
+};
+
+export type DianNumberingRange = {
+  id: string;
+  profile_id: string;
+  prefix: string;
+  resolution_number: string;
+  resolution_date: string;
+  valid_from: string;
+  valid_to: string;
+  range_from: number;
+  range_to: number;
+  next_number: number;
+  active: boolean;
+};
+
+export type DianNumberingRangeWrite = {
+  prefix: string;
+  resolution_number: string;
+  resolution_date: string;
+  valid_from: string;
+  valid_to: string;
+  range_from: number;
+  range_to: number;
+};
+
+export type DianElectronicDocumentType = "invoice" | "credit_note" | "debit_note";
+
+export type DianElectronicDocument = {
+  id: string;
+  company_id: string;
+  corrects_document_id: string | null;
+  document_number: string;
+  document_type: DianElectronicDocumentType;
+  prefix: string;
+  consecutive: number;
+  issue_date: string;
+  currency_code: string;
+  payable_amount: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DianSignedTestDocumentUpload = {
+  file: File;
+  prefix: string;
+  consecutive: number;
+  issue_date: string;
+  document_type: DianElectronicDocumentType;
+  currency_code: string;
+  payable_amount: string;
+  confirmed: true;
+};
+
+export type DianDocumentEvent = {
+  id: string;
+  status: string;
+  code: string | null;
+  message: string | null;
+  created_at: string;
+};
+
+export type DianDocumentEventsResponse = {
+  items: DianDocumentEvent[];
 };

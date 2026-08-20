@@ -1,0 +1,2 @@
+# El entrypoint se ejecuta dentro de Linux; CRLF impediría que Docker lo ejecute.
+backend/docker/entrypoint.sh text eol=lf

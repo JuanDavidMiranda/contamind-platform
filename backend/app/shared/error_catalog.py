@@ -40,6 +40,12 @@ ERROR_CATALOG: dict[str, ErrorDefinition] = {
         message="Correo o contraseña inválidos.",
         recoverable=True,
     ),
+    "AUTH_PASSWORD_CHANGE_REQUIRED": ErrorDefinition(
+        code="AUTH_PASSWORD_CHANGE_REQUIRED",
+        http_status=403,
+        message="Debes cambiar la contraseña temporal antes de continuar.",
+        recoverable=True,
+    ),
     "FORBIDDEN": ErrorDefinition(
         code="FORBIDDEN",
         http_status=403,

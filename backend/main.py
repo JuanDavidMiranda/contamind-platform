@@ -11,6 +11,7 @@ from app.models import bank_reconciliation as bank_reconciliation_models  # noqa
 from app.models import collection_followup as collection_followup_models  # noqa: F401
 from app.models import data_source as data_source_models  # noqa: F401  (registra modelos para create_all)
 from app.models import dian as dian_models  # noqa: F401
+from app.models import dian_electronic as dian_electronic_models  # noqa: F401
 from app.models import electronic_invoicing as electronic_invoicing_models  # noqa: F401
 from app.models import organization as organization_models  # noqa: F401  (registra modelos para create_all)
 from app.models import user as user_models  # noqa: F401  (registra modelos para create_all)
